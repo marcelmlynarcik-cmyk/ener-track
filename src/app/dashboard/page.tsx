@@ -72,8 +72,7 @@ export default async function DashboardPage() {
           <CardContent>
             {dashboardData && dashboardData.status === "success" ? (
               <>
-                <div className="text-2xl font-bold">{dashboardData.consumption.toFixed(0)} kWh</div>
-                <p className="text-xs text-muted-foreground">
+                                 <div className="text-2xl font-bold">{dashboardData.consumption!.toFixed(0)} kWh</div>                <p className="text-xs text-muted-foreground">
                   za obdobie{" "}
                   {format(new Date(dashboardData.periodStart), "dd. MM. yyyy", { locale: sk })}
                   {" – "}
