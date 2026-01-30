@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 
 const initialState = {
   error: "",
-  success: false,
+  success: undefined,
 }
 
 export function AddMeterForm() {
