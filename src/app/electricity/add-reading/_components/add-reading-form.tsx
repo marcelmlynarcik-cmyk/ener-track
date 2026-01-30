@@ -27,7 +27,7 @@ interface AddReadingFormProps {
 
 const initialState = {
   error: "",
-  success: false,
+  success: undefined,
 }
 
 export function AddReadingForm({ meters }: AddReadingFormProps) {
