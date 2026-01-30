@@ -23,7 +23,7 @@ interface AddReadingPageProps {
 
 export default function AddReadingPage({ params }: AddReadingPageProps) {
   const router = useRouter()
-  const { meterId } = React.use(params)
+  const { meterId } = params
 
   const [date, setDate] = useState<Date | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
