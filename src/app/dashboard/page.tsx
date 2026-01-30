@@ -74,10 +74,9 @@ export default async function DashboardPage() {
               <>
                                  <div className="text-2xl font-bold">{dashboardData.consumption!.toFixed(0)} kWh</div>                <p className="text-xs text-muted-foreground">
                   za obdobie{" "}
-                  {format(new Date(dashboardData.periodStart), "dd. MM. yyyy", { locale: sk })}
-                  {" – "}
-                  {format(new Date(dashboardData.periodEnd), "dd. MM. yyyy", { locale: sk })}
-                </p>
+                                     {format(new Date(dashboardData.periodStart!), "dd. MM. yyyy", { locale: sk })}
+                                    {" – "}
+                                    {format(new Date(dashboardData.periodEnd!), "dd. MM. yyyy", { locale: sk })}                </p>
                 {dashboardData.comparison && (
                   <p className={`text-xs mt-2 flex items-center ${dashboardData.comparison.color}`}>
                     {dashboardData.comparison.icon === 'up' ? (
