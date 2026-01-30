@@ -441,3 +441,34 @@ export async function updateElectricityReading(previousState: any, formData: For
 
   return { success: true };
 }
+
+export async function getElectricityConsumptionChartData(meterId: string) {
+  if (!meterId) {
+    return [];
+  }
+
+  const readings = await getElectricityReadingsForMeter(meterId); // These are already sorted ascending by date
+
+  if (!readings || readings.length < 2) {
+    return [];
+  }
+
+  const chartData: { date: string; consumption: number; cumulativeConsumption: number }[] = [];
+  let cumulative = 0;
+
+  for (let i = 1; i < readings.length; i++) {
+    const previousReading = readings[i - 1];
+    const currentReading = readings[i];
+
+    const consumption = currentReading.value - previousReading.value;
+    cumulative += consumption;
+
+    chartData.push({
+      date: format(new Date(currentReading.reading_date), 'dd.MM.'), // Format date for chart X-axis
+      consumption: consumption,
+      cumulativeConsumption: cumulative,
+    });
+  }
+
+  return chartData;
+}

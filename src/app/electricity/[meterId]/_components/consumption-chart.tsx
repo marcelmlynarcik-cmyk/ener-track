@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { getElectricityConsumption } from '@/app/electricity/actions'
+import { getElectricityConsumptionChartData } from '@/app/electricity/actions'
 
 interface ConsumptionChartProps {
   meterId: string;
@@ -23,7 +23,7 @@ export function ConsumptionChart({ meterId }: ConsumptionChartProps) {
     async function fetchConsumptionData() {
       try {
         setLoading(true)
-        const consumption = await getElectricityConsumption(meterId)
+        const consumption = await getElectricityConsumptionChartData(meterId)
         setData(consumption)
       } catch (err: any) {
         setError(err.message)
