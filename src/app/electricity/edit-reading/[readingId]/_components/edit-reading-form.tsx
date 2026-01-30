@@ -37,8 +37,8 @@ interface EditReadingFormProps {
 }
 
 const initialState = {
-  error: '',
-  success: false,
+  error: "",
+  success: undefined,
 };
 
 
