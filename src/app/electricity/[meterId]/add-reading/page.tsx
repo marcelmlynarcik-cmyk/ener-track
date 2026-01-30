@@ -44,7 +44,7 @@ export default function AddReadingPage({ params }: AddReadingPageProps) {
       return
     }
 
-    const result = await addElectricityReading(formData)
+    const result = await addElectricityReading(null, formData)
 
     if (result?.error) {
       setError(result.error)
