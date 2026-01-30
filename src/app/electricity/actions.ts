@@ -42,7 +42,7 @@ function findReadingImmediatelyBefore(readings: any[], date: Date): any | null {
   return previousReading;
 }
 
-export async function addElectricityMeter(formData: FormData) {
+export async function addElectricityMeter(previousState: any, formData: FormData) {
   const supabase = getSupabaseServerClient()
 
   const name = formData.get('name') as string
