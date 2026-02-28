@@ -19,9 +19,9 @@ import Link from "next/link";
 import { Plus, ArrowLeft } from "lucide-react";
 
 interface MeterDetailsPageProps {
-  params: {
+  params: Promise<{
     meterId: string;
-  };
+  }>;
 }
 
 export default async function MeterDetailsPage({
