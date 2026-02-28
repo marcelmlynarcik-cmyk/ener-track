@@ -1,7 +1,7 @@
 // src/app/electricity/[meterId]/add-reading/page.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, FC } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { sk } from 'date-fns/locale'
@@ -15,7 +15,13 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { addElectricityReading } from '@/app/electricity/actions'
 
-export default function AddReadingPage({ params }: { params: { meterId: string } }) {
+interface AddReadingPageProps {
+  params: {
+    meterId: string
+  }
+}
+
+const AddReadingPage: FC<AddReadingPageProps> = ({ params }) => {
   const router = useRouter()
   const { meterId } = params
 
@@ -107,3 +113,5 @@ export default function AddReadingPage({ params }: { params: { meterId: string }
     </div>
   )
 }
+
+export default AddReadingPage
