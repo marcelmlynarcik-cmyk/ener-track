@@ -4,9 +4,9 @@ import { EditReadingForm } from "./_components/edit-reading-form";
 import { notFound } from "next/navigation";
 
 interface EditReadingPageProps {
-  params: {
+  params: Promise<{
     readingId: string;
-  };
+  }>;
 }
 
 export default async function EditElectricityReadingPage({ params }: EditReadingPageProps) {
