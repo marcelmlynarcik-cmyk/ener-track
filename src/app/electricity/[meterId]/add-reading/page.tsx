@@ -15,13 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { addElectricityReading } from '@/app/electricity/actions'
 
-interface AddReadingPageProps {
-  params: {
-    meterId: string
-  }
-}
-
-export default function AddReadingPage({ params }: AddReadingPageProps) {
+export default function AddReadingPage({ params }: { params: { meterId: string } }) {
   const router = useRouter()
   const { meterId } = params
 
