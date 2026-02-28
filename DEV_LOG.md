@@ -35,38 +35,30 @@ A web application for tracking household energy usage, focusing on electricity m
 -   **Back Button on Meter Details:** Added a "Späť" (Back) button to the "Detaily merača" page for improved navigation.
 -   **Clickable Dashboard Cards:** Made the "Posledný odpočet" and "Spotreba za posledné obdobie" cards on the "Prehľad" (Dashboard) page clickable, linking to the main "Elektrina" overview.
 -   **Dashboard Card Icons:** Added relevant icons (`Gauge`, `CloudLightning`) to the dashboard cards for better visual identification.
--   **Fixed `useActionState` Import:** Corrected the import path for `useActionState` in the `EditReadingForm` component to resolve a runtime `TypeError`.
 -   **Added Delete Functionality for Readings:** Implemented the ability to delete electricity readings from the "Elektrina" page, including a server action, a confirmation dialog, and UI integration.
 -   **Added Update Functionality for Readings:** Implemented the ability to edit electricity readings, including a new edit page, a pre-filled form, a server action for updating, and UI integration.
 -   **Sort Order on Meter Details Page:** Changed the sorting logic on the "Detaily merača" page to display the newest readings at the top of the table.
--   **Fixed `params` unwrapping in Edit Page:** Corrected the dynamic route parameter access on the edit page by awaiting the `params` object, resolving a server error.
--   **Fixed `formData.get is not a function`:** Corrected the `addElectricityReading` server action signature to properly receive `formData` when used with `useActionState`.
--   **Redirect after Add Reading:** Implemented redirection to the main electricity page after a successful addition of an electricity reading.
-
-## Resolved Issues (during redesign and refactoring)
-
-- Crashes on `npm run dev` due to Supabase auth and middleware code.
-- "Invalid API key" errors due to incorrect `.env.local` configuration.
-- "Link is not defined" and "Button is not defined" errors due to missing imports.
-- "useState used in Server Component" error by extracting `AddMeterForm` to a Client Component.
-- "Chyba pri pridávaní elektromera" (Error adding electricity meter) due to incorrect RLS policies and `user_id` column.
-- `TypeError: Cannot read properties of null (reading 'reset')` in `add-meter-form.tsx`.
-- `ReferenceError: Link is not defined` in `page.tsx`.
-- `Console Error: A param property was accessed directly with params.meterId. params is a Promise` in `add-reading/page.tsx`.
-- `Build Error: useRouter` in Server Component in `add-reading/page.tsx`.
-- `Build Error: Module not found: Can't resolve 'next/font/google/target.css'` (Fixed by correcting Geist font import from `next/font/google` to `geist/font/sans` and `geist/font/mono`).
-- `Build Error: Module not found: Can't resolve '@/components/ui/card'` (Fixed by creating `src/components/ui/card.tsx`).
-- `Build Error: Module not found: Can't resolve '@/components/ui/select'` (Fixed by creating `src/components/ui/select.tsx`).
-- `Build Error: Module not found: Can't resolve '@radix-ui/react-select'` (Fixed by installing `@radix-ui/react-select`).
-- `Console Error: ReactDOM.useFormState has been renamed to React.useActionState` (Fixed by updating `useFormState` to `React.useActionState` in `add-reading-form.tsx` and `add-meter-form.tsx`).
-- `Console Error: Error fetching electricity meter: "invalid input syntax for type uuid: \"undefined\""` (Fixed by adding `meterId` validation in action functions).
-- `Console Error: Error fetching electricity meter: meterId is undefined` (Fixed by adding `meterId` UUID validation in `src/app/electricity/[meterId]/page.tsx` and awaiting `params`).
-- `Console Error: 
-legacyBehavior` is deprecated` (Fixed by removing `legacyBehavior` prop and refactoring `Link` component in `src/components/bottom-navbar.tsx`).
-- `Build Error: Export getDashboardConsumptionData doesn't exist in target module` (Fixed by fully reconstructing `src/app/electricity/actions.ts` with all functions and imports in correct order and scope, and integrating per-reading comparison logic into `getProcessedElectricityReadings`).
+-   **PWA Implementation:**
+    -   Installed `next-pwa` package.
+    -   Configured `next.config.ts` to integrate `next-pwa`, enabling PWA in production and disabling in development.
+    -   Created `public/manifest.json` with basic PWA metadata (name, short_name, icons, theme_color, background_color, start_url, display, orientation, description).
+    -   Added a 180x180 icon reference for iPhone compatibility to `manifest.json`.
+    -   Added `<link rel="manifest" ...>` and `<link rel="apple-touch-icon" ...>` tags to `src/app/layout.tsx`.
+-   **Vercel Build Fixes:**
+    -   **Resolved `Error: Supabase environment variables (URL/Anon Key) are missing.`:** Instructed user to correctly set environment variables on Vercel.
+    -   **Resolved `Export createClient doesn't exist in target module`:** Removed `/login` route, corrected `main` branch push, and verified Vercel build from correct branch.
+    -   **Resolved `Type error: 'dashboardData.consumption' is possibly 'null'.`:** Added non-null assertion operator (`!`) to `dashboardData.consumption` in `src/app/dashboard/page.tsx`.
+    -   **Resolved `Type error: No overload matches this call. ... dashboardData.periodStart`:** Added non-null assertion operator (`!`) to `dashboardData.periodStart` and `dashboardData.periodEnd` in `src/app/dashboard/page.tsx`.
+    -   **Resolved `Type error: Module ... has no exported member 'getElectricityConsumption'.`:** Created `getElectricityConsumptionChartData` server action in `src/app/electricity/actions.ts` and updated `src/app/electricity/[meterId]/_components/consumption-chart.tsx` to use it.
+    -   **Resolved `Type error: Expected 2 arguments, but got 1. ... addElectricityReading` (manual call):** Passed `null` as the first argument to `addElectricityReading` in `src/app/electricity/[meterId]/add-reading/page.tsx` to match its `useActionState` compatible signature.
+    -   **Resolved `Type error: No overload matches this call. ... addElectricityMeter` (in AddMeterForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-meter/_components/add-meter-form.tsx`.
+    -   **Resolved `Type error: No overload matches this call. ... addElectricityReading` (in AddReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-reading/_components/add-reading-form.tsx`.
+    -   **Resolved `Type error: No overload matches this call. ... updateElectricityReading` (in EditReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/edit-reading/[readingId]/_components/edit-reading-form.tsx`.
+    -   **Resolved `Type error: Cannot find module 'next-themes/dist/types'.`:** Corrected import path for `ThemeProviderProps` from `next-themes/dist/types` to `next-themes` in `src/components/theme-provider.tsx`.
+    -   **Resolved `Type error: (0 , __TURBOPACK__...__.useActionState) is not a function`:** Corrected the import path for `useActionState` in `EditReadingForm` to `react`.
 
 ## Future Work
 
-The application now has a robust and logically correct foundation for tracking electricity readings, with a clear structure, clean design, and improved UX. The dashboard provides an at-a-glance overview, and the electricity readings table offers detailed comparison for each period.
+The application now has a robust and logically correct foundation for tracking electricity readings, with a clear structure, clean design, and improved UX. The dashboard provides an at-a-glance overview, and the electricity readings table offers detailed comparison for each period. It also has PWA capabilities and should now build successfully on Vercel.
 
 Continuing with the user's request, the next steps are to focus on further refinements or new modules as per their guidance.

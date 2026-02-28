@@ -124,36 +124,42 @@ export async function getProcessedElectricityReadings() {
             const R1_last_year = findReadingImmediatelyBefore(meterReadings, new Date(R2_last_year.reading_date));
 
             if (R1_last_year) {
-                const consumptionLastYear = R2_last_year.value - R1_last_year.value;
+                const currentPeriodDurationMs = new Date(R2.reading_date).getTime() - new Date(R1.reading_date).getTime();
+                const lastYearPeriodDurationMs = new Date(R2_last_year.reading_date).getTime() - new Date(R1_last_year.reading_date).getTime();
+                const DURATION_TOLERANCE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-                const diff = consumptionCurrent - consumptionLastYear;
-                let percentageDiff = 0;
-                if (consumptionLastYear !== 0) {
-                    percentageDiff = (diff / consumptionLastYear) * 100;
+                if (Math.abs(currentPeriodDurationMs - lastYearPeriodDurationMs) <= DURATION_TOLERANCE_MS) {
+                    const consumptionLastYear = R2_last_year.value - R1_last_year.value;
+
+                    const diff = consumptionCurrent - consumptionLastYear;
+                    let percentageDiff = 0;
+                    if (consumptionLastYear !== 0) {
+                        percentageDiff = (diff / consumptionLastYear) * 100;
+                    }
+
+                    let text = '';
+                    let icon = null;
+                    let colorClass = '';
+
+                    if (diff < 0) { // Current is less than last year -> BETTER
+                        text = `O ${Math.abs(diff).toFixed(0)} kWh menej (↓ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
+                        icon = 'down';
+                        colorClass = 'text-green-500';
+                    } else if (diff > 0) { // Current is more than last year -> WORSE
+                        text = `O ${Math.abs(diff).toFixed(0)} kWh viac (↑ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
+                        icon = 'up';
+                        colorClass = 'text-red-500';
+                    } else {
+                        text = 'Rovnaká spotreba ako pred rokom';
+                        colorClass = 'text-muted-foreground';
+                    }
+
+                    comparisonResult = {
+                        text: text,
+                        icon: icon,
+                        colorClass: colorClass,
+                    };
                 }
-
-                let text = '';
-                let icon = null;
-                let colorClass = '';
-
-                if (diff < 0) { // Current is less than last year -> BETTER
-                    text = `O ${Math.abs(diff).toFixed(0)} kWh menej (↓ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
-                    icon = 'down';
-                    colorClass = 'text-green-500';
-                } else if (diff > 0) { // Current is more than last year -> WORSE
-                    text = `O ${Math.abs(diff).toFixed(0)} kWh viac (↑ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
-                    icon = 'up';
-                    colorClass = 'text-red-500';
-                } else {
-                    text = 'Rovnaká spotreba ako pred rokom';
-                    colorClass = 'text-muted-foreground';
-                }
-
-                comparisonResult = {
-                    text: text,
-                    icon: icon,
-                    colorClass: colorClass,
-                };
             }
         }
       }
@@ -328,8 +334,8 @@ export async function getDashboardConsumptionData(meterId: string) {
         };
     }
 
-    const R2 = allReadings[allReadings.length - 1];
-    const R1 = allReadings[allReadings.length - 2];
+    const R2 = allReadings[0];
+    const R1 = allReadings[1];
 
     const lastPeriodConsumption = R2.value - R1.value;
     const lastPeriodStartDate = new Date(R1.reading_date);
