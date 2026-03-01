@@ -48,7 +48,7 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --background: 0 0% 97%; /* slate-50 */
   --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
@@ -82,7 +82,7 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
+  --background: 222.2 47.4% 11.2%; /* A darker background for dark mode (e.g., slate-900) */
   --foreground: oklch(0.984 0.003 247.858);
   --card: oklch(0.208 0.042 265.755);
   --card-foreground: oklch(0.984 0.003 247.858);
@@ -117,9 +117,11 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
   }
 }
+
+

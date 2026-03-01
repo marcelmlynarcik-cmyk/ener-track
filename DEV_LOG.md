@@ -44,18 +44,34 @@ A web application for tracking household energy usage, focusing on electricity m
     -   Created `public/manifest.json` with basic PWA metadata (name, short_name, icons, theme_color, background_color, start_url, display, orientation, description).
     -   Added a 180x180 icon reference for iPhone compatibility to `manifest.json`.
     -   Added `<link rel="manifest" ...>` and `<link rel="apple-touch-icon" ...>` tags to `src/app/layout.tsx`.
--   **Vercel Build Fixes:**
-    -   **Resolved `Error: Supabase environment variables (URL/Anon Key) are missing.`:** Instructed user to correctly set environment variables on Vercel.
-    -   **Resolved `Export createClient doesn't exist in target module`:** Removed `/login` route, corrected `main` branch push, and verified Vercel build from correct branch.
-    -   **Resolved `Type error: 'dashboardData.consumption' is possibly 'null'.`:** Added non-null assertion operator (`!`) to `dashboardData.consumption` in `src/app/dashboard/page.tsx`.
-    -   **Resolved `Type error: No overload matches this call. ... dashboardData.periodStart`:** Added non-null assertion operator (`!`) to `dashboardData.periodStart` and `dashboardData.periodEnd` in `src/app/dashboard/page.tsx`.
-    -   **Resolved `Type error: Module ... has no exported member 'getElectricityConsumption'.`:** Created `getElectricityConsumptionChartData` server action in `src/app/electricity/actions.ts` and updated `src/app/electricity/[meterId]/_components/consumption-chart.tsx` to use it.
-    -   **Resolved `Type error: Expected 2 arguments, but got 1. ... addElectricityReading` (manual call):** Passed `null` as the first argument to `addElectricityReading` in `src/app/electricity/[meterId]/add-reading/page.tsx` to match its `useActionState` compatible signature.
-    -   **Resolved `Type error: No overload matches this call. ... addElectricityMeter` (in AddMeterForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-meter/_components/add-meter-form.tsx`.
-    -   **Resolved `Type error: No overload matches this call. ... addElectricityReading` (in AddReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-reading/_components/add-reading-form.tsx`.
-    -   **Resolved `Type error: No overload matches this call. ... updateElectricityReading` (in EditReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/edit-reading/[readingId]/_components/edit-reading-form.tsx`.
-    -   **Resolved `Type error: Cannot find module 'next-themes/dist/types'.`:** Corrected import path for `ThemeProviderProps` from `next-themes/dist/types` to `next-themes` in `src/components/theme-provider.tsx`.
-    -   **Resolved `Type error: (0 , __TURBOPACK__...__.useActionState) is not a function`:** Corrected the import path for `useActionState` in `EditReadingForm` to `react`.
+
+## Logic Fixes (2026-02-28)
+-   **Dashboard "wrong data":** Corrected the logic in `src/app/electricity/actions.ts` within `getDashboardConsumptionData` to calculate "last period consumption" using the two most recent readings, instead of the two oldest.
+-   **Electricity page "comparison not working properly":** Implemented a duration check in `src/app/electricity/actions.ts` within `getProcessedElectricityReadings` to ensure year-over-year consumption comparisons are made between periods of similar length (within a 7-day tolerance).
+
+## Dependency Management (2026-02-28)
+-   **Resolved `next-pwa` TypeScript error:** Uninstalled the outdated `@types/next-pwa` package and created a `src/next-pwa.d.ts` declaration file (`declare module 'next-pwa';`) to resolve type conflicts introduced by an incompatible type definition.
+
+## Vercel Build Fixes
+
+-   **Resolved `Error: Supabase environment variables (URL/Anon Key) are missing.`:** Instructed user to correctly set environment variables on Vercel.
+-   **Resolved `Export createClient doesn't exist in target module`:** Removed `/login` route, corrected `main` branch push, and verified Vercel build from correct branch.
+-   **Resolved `Type error: 'dashboardData.consumption' is possibly 'null'.`:** Added non-null assertion operator (`!`) to `dashboardData.consumption` in `src/app/dashboard/page.tsx`.
+-   **Resolved `Type error: No overload matches this call. ... dashboardData.periodStart`:** Added non-null assertion operator (`!`) to `dashboardData.periodStart` and `dashboardData.periodEnd` in `src/app/dashboard/page.tsx`.
+-   **Resolved `Type error: Module ... has no exported member 'getElectricityConsumption'.`:** Created `getElectricityConsumptionChartData` server action in `src/app/electricity/actions.ts` and updated `src/app/electricity/[meterId]/_components/consumption-chart.tsx` to use it.
+-   **Resolved `Type error: Expected 2 arguments, but got 1. ... addElectricityReading` (manual call):** Passed `null` as the first argument to `addElectricityReading` in `src/app/electricity/[meterId]/add-reading/page.tsx` to match its `useActionState` compatible signature.
+-   **Resolved `Type error: No overload matches this call. ... addElectricityMeter` (in AddMeterForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-meter/_components/add-meter-form.tsx`.
+-   **Resolved `Type error: No overload matches this call. ... addElectricityReading` (in AddReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/add-reading/_components/add-reading-form.tsx`.
+-   **Resolved `Type error: No overload matches this call. ... updateElectricityReading` (in EditReadingForm):** Modified `initialState.success` to `undefined` in `src/app/electricity/edit-reading/[readingId]/_components/edit-reading-form.tsx`.
+-   **Resolved `Type error: Cannot find module 'next-themes/dist/types'.`:** Corrected import path for `ThemeProviderProps` from `next-themes/dist/types` to `next-themes` in `src/components/theme-provider.tsx`.
+-   **Resolved `Type error: (0 , __TURBOPACK__...__.useActionState) is not a function`:** Corrected the import path for `useActionState` in `EditReadingForm` to `react`.
+-   **Resolved Turbopack/Webpack conflict (npm run dev) (2026-02-28):** Modified `package.json` to use `next dev --webpack` to ensure compatibility with `next-pwa`.
+-   **Resolved Turbopack/Webpack conflict (npm run build) (2026-02-28):** Modified `package.json` to use `next build --webpack` to ensure compatibility with `next-pwa` during the build process.
+-   **Resolved `TypeError: fetch failed` / `521: Web server is down` (Supabase credentials) (2026-02-28):** Updated `.env.local` with correct Supabase URL and anon key. The initial error was due to incorrect credentials pointing to a paused project, which changed to Cloudflare 521 after user restart, confirming environment variable re-load.
+-   **Resolved `Type error: Type 'AddReadingPageProps' does not satisfy the constraint 'PageProps'.` (Next.js 16 params in Client Component) (2026-02-28):** Refactored `src/app/electricity/[meterId]/add-reading/page.tsx` into a Server Component wrapper that awaits the `params` promise and passes `meterId` to a new Client Component (`add-reading-form.tsx`).
+-   **Resolved `Type error: Type 'MeterDetailsPageProps' does not satisfy the constraint 'PageProps'.` (Next.js 16 params in Server Component) (2026-02-28):** Corrected the `MeterDetailsPageProps` interface in `src/app/electricity/[meterId]/page.tsx` to type `params` as a `Promise<{ meterId: string }>`.
+-   **Resolved `Type error: Type 'EditReadingPageProps' does not satisfy the constraint 'PageProps'.` (Next.js 16 params in Server Component) (2026-02-28):** Corrected the `EditReadingPageProps` interface in `src/app/electricity/edit-reading/[readingId]/page.tsx` to type `params` as a `Promise<{ readingId: string }>`.
+
 
 ## Future Work
 

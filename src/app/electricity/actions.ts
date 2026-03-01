@@ -103,61 +103,32 @@ export async function getProcessedElectricityReadings() {
       const currentReading = meterReadings[i];
       const previousReading = i > 0 ? meterReadings[i - 1] : null;
 
-      const difference = previousReading
+      const consumptionCurrent = previousReading
         ? currentReading.value - previousReading.value
         : 0;
 
       let comparisonResult = null;
-      // Only perform comparison if there's a previous reading for the current period
+      // Find reading from same month in previous year
       if (previousReading) {
-        const R2 = currentReading;
-        const R1 = previousReading;
-        const consumptionCurrent = R2.value - R1.value;
+        const currentDate = new Date(currentReading.reading_date);
+        const targetDateLastYear = new Date(currentDate);
+        targetDateLastYear.setFullYear(currentDate.getFullYear() - 1);
 
-        const R2Date = new Date(R2.reading_date);
-        const targetDateR2LastYear = new Date(R2Date);
-        targetDateR2LastYear.setFullYear(R2Date.getFullYear() - 1);
-
-        const R2_last_year = findReadingClosestToDate(meterReadings, targetDateR2LastYear);
+        const R2_last_year = findReadingClosestToDate(meterReadings, targetDateLastYear, 10);
 
         if (R2_last_year) {
             const R1_last_year = findReadingImmediatelyBefore(meterReadings, new Date(R2_last_year.reading_date));
 
             if (R1_last_year) {
-                const currentPeriodDurationMs = new Date(R2.reading_date).getTime() - new Date(R1.reading_date).getTime();
-                const lastYearPeriodDurationMs = new Date(R2_last_year.reading_date).getTime() - new Date(R1_last_year.reading_date).getTime();
-                const DURATION_TOLERANCE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+                const consumptionLastYear = R2_last_year.value - R1_last_year.value;
 
-                if (Math.abs(currentPeriodDurationMs - lastYearPeriodDurationMs) <= DURATION_TOLERANCE_MS) {
-                    const consumptionLastYear = R2_last_year.value - R1_last_year.value;
-
+                if (consumptionLastYear !== 0) {
                     const diff = consumptionCurrent - consumptionLastYear;
-                    let percentageDiff = 0;
-                    if (consumptionLastYear !== 0) {
-                        percentageDiff = (diff / consumptionLastYear) * 100;
-                    }
-
-                    let text = '';
-                    let icon = null;
-                    let colorClass = '';
-
-                    if (diff < 0) { // Current is less than last year -> BETTER
-                        text = `O ${Math.abs(diff).toFixed(0)} kWh menej (↓ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
-                        icon = 'down';
-                        colorClass = 'text-green-500';
-                    } else if (diff > 0) { // Current is more than last year -> WORSE
-                        text = `O ${Math.abs(diff).toFixed(0)} kWh viac (↑ ${Math.abs(percentageDiff).toFixed(0)} %) ako pred rokom`;
-                        icon = 'up';
-                        colorClass = 'text-red-500';
-                    } else {
-                        text = 'Rovnaká spotreba ako pred rokom';
-                        colorClass = 'text-muted-foreground';
-                    }
+                    const percentageDiff = (diff / consumptionLastYear) * 100;
 
                     comparisonResult = {
-                        text: text,
-                        icon: icon,
-                        colorClass: colorClass,
+                        percentage: parseFloat(percentageDiff.toFixed(1)),
+                        icon: percentageDiff > 0 ? 'up' : (percentageDiff < 0 ? 'down' : null),
                     };
                 }
             }
@@ -167,8 +138,8 @@ export async function getProcessedElectricityReadings() {
       processedReadings.push({
         ...currentReading,
         meter_name: meterMap.get(currentReading.meter_id) || 'Neznámy merač',
-        difference: difference,
-        comparison: comparisonResult, // Add comparison result to each reading
+        difference: consumptionCurrent,
+        comparison: comparisonResult,
       });
     }
   }
@@ -477,4 +448,95 @@ export async function getElectricityConsumptionChartData(meterId: string) {
   }
 
   return chartData;
+}
+
+export async function getYearlyElectricityConsumptionChartData() {
+  const supabase = getSupabaseServerClient();
+  const readings = await supabase
+    .from('electricity_readings')
+    .select('reading_date, value, meter_id')
+    .order('reading_date', { ascending: true });
+
+  if (readings.error) {
+    console.error('Error fetching readings for yearly consumption:', readings.error.message);
+    return [];
+  }
+
+  const readingsByMeter: { [meterId: string]: any[] } = {};
+  readings.data.forEach(reading => {
+    if (!readingsByMeter[reading.meter_id]) {
+      readingsByMeter[reading.meter_id] = [];
+    }
+    readingsByMeter[reading.meter_id].push(reading);
+  });
+
+  // Calculate monthly consumption by year and month
+  // We need to interpolate or estimate if readings are not exactly on month boundaries
+  // For simplicity, we will calculate differences between readings and attribute to the month of the current reading
+  const monthlyData: { [year: number]: { [month: number]: number } } = {};
+
+  for (const meterId in readingsByMeter) {
+    const meterReadings = readingsByMeter[meterId];
+    for (let i = 1; i < meterReadings.length; i++) {
+      const prev = meterReadings[i - 1];
+      const curr = meterReadings[i];
+      const consumption = curr.value - prev.value;
+      const date = new Date(curr.reading_date);
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0-11
+
+      if (!monthlyData[year]) monthlyData[year] = {};
+      if (!monthlyData[year][month]) monthlyData[year][month] = 0;
+      monthlyData[year][month] += consumption;
+    }
+  }
+
+  return monthlyData;
+}
+
+export async function getActiveMeterSummary(meterId: string) {
+  const supabase = getSupabaseServerClient();
+
+  const [meterResult, readingsResult] = await Promise.all([
+    supabase.from('electricity_meters').select('*').eq('id', meterId).single(),
+    supabase.from('electricity_readings').select('*').eq('meter_id', meterId).order('reading_date', { ascending: false })
+  ]);
+
+  if (meterResult.error || !meterResult.data) {
+    return null;
+  }
+
+  const meter = meterResult.data;
+  const readings = readingsResult.data || [];
+
+  const latestReading = readings.length > 0 ? readings[0] : null;
+  const sparklineData = readings.slice(0, 7).reverse().map((reading, index, array) => {
+    if (index === 0) return null;
+    const prev = array[index - 1];
+    return {
+      date: format(new Date(reading.reading_date), 'dd.MM.'),
+      value: reading.value - prev.value
+    };
+  }).filter(Boolean);
+
+  // Calculate average monthly consumption
+  let avgMonthlyConsumption = 0;
+  if (readings.length >= 2) {
+    const totalConsumption = readings[0].value - readings[readings.length - 1].value;
+    const firstDate = new Date(readings[readings.length - 1].reading_date);
+    const lastDate = new Date(readings[0].reading_date);
+    const diffMonths = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 + (lastDate.getMonth() - firstDate.getMonth());
+    avgMonthlyConsumption = diffMonths > 0 ? totalConsumption / diffMonths : totalConsumption;
+  }
+
+  // Get comparison for last month
+  const dashboardData = await getDashboardConsumptionData(meterId);
+
+  return {
+    meter,
+    latestReading,
+    sparklineData,
+    avgMonthlyConsumption,
+    comparison: dashboardData.comparison
+  };
 }
