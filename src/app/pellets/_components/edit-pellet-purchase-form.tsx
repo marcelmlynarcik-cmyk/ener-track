@@ -26,9 +26,9 @@ interface PelletPurchase {
   created_at: string;
 }
 
-export function EditPelletPurchaseForm({ purchase }: { purchase: PelletPurchase }) {
+export function EditPelletPurchaseForm({ purchase }: EditPelletPurchaseFormProps) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(updatePelletPurchase, { success: undefined, message: '' });
+  const [state, formAction] = useActionState(updatePelletPurchase, { success: null, message: '' });
 
   useEffect(() => {
     if (state.success === true) {
