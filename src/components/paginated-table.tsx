@@ -73,7 +73,7 @@ export function PaginatedTable<T extends { id: string }>(
                       key={`${item.id}-${column.key as string}-${columnIndex}`}
                       className={`px-4 py-3 whitespace-nowrap text-sm text-slate-600 ${column.className || ''}`}
                     >
-                      {column.render ? column.render(item) : (item[column.key] as React.ReactNode)}
+                      {column.render ? column.render(item) : column.key !== 'actions' ? (item[column.key as keyof T] as React.ReactNode) : null}
                     </td>
                   ))}
                 </tr>
