@@ -23,7 +23,12 @@ interface PelletConsumption {
   consumption_date: string;
   quantity_kg: number;
   cost_czk: number;
+  average_temperature_celsius: number | null;
   created_at: string;
+}
+
+interface EditPelletConsumptionFormProps {
+  consumption: PelletConsumption;
 }
 
 export function EditPelletConsumptionForm({ consumption }: EditPelletConsumptionFormProps) {

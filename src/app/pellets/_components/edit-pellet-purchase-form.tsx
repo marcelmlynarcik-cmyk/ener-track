@@ -26,6 +26,10 @@ interface PelletPurchase {
   created_at: string;
 }
 
+interface EditPelletPurchaseFormProps {
+  purchase: PelletPurchase;
+}
+
 export function EditPelletPurchaseForm({ purchase }: EditPelletPurchaseFormProps) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(updatePelletPurchase, { success: null, message: '' } as any);
