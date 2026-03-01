@@ -26,8 +26,8 @@ interface AddReadingFormProps {
 }
 
 const initialState = {
-  error: "",
-  success: null,
+  error: "" as string | null,
+  success: null as boolean | null,
 }
 
 export function AddReadingForm({ meters }: AddReadingFormProps) {
@@ -35,7 +35,7 @@ export function AddReadingForm({ meters }: AddReadingFormProps) {
   const router = useRouter()
 
   useEffect(() => {
-    if (state.success) {
+    if (state.success === true) {
       toast.success("Odpočet elektriny bol úspešne pridaný!")
       router.push("/electricity")
     } else if (state.error) {

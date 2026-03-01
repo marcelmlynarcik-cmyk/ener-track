@@ -24,7 +24,7 @@ interface AddPelletConsumptionFormProps {
 
 export function AddPelletConsumptionForm({ trigger }: AddPelletConsumptionFormProps) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(addPelletConsumption, { success: null, message: '' });
+  const [state, formAction] = useActionState(addPelletConsumption, { success: null, message: '' } as any);
 
   useEffect(() => {
     if (state.success === true) {

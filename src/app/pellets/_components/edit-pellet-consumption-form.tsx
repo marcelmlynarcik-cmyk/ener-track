@@ -28,7 +28,7 @@ interface PelletConsumption {
 
 export function EditPelletConsumptionForm({ consumption }: EditPelletConsumptionFormProps) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(updatePelletConsumption, { success: null, message: '' });
+  const [state, formAction] = useActionState(updatePelletConsumption, { success: null, message: '' } as any);
 
   useEffect(() => {
     if (state.success === true) {

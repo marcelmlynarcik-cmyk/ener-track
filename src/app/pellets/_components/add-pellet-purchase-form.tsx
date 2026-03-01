@@ -24,7 +24,7 @@ interface AddPelletPurchaseFormProps {
 
 export function AddPelletPurchaseForm({ trigger }: AddPelletPurchaseFormProps) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(addPelletPurchase, { success: null, message: '' });
+  const [state, formAction] = useActionState(addPelletPurchase, { success: null, message: '' } as any);
 
   useEffect(() => {
     if (state.success === true) {

@@ -37,8 +37,8 @@ interface EditReadingFormProps {
 }
 
 const initialState = {
-  error: "",
-  success: null,
+  error: "" as string | null,
+  success: null as boolean | null,
 };
 
 
@@ -47,7 +47,7 @@ export function EditReadingForm({ reading, meters }: EditReadingFormProps) {
   const router = useRouter();
 
   useEffect(() => {
-    if (state.success) {
+    if (state.success === true) {
       toast.success('Odpočet elektriny bol úspešne upravený!');
       router.push('/electricity');
     } else if (state.error) {

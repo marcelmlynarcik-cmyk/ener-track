@@ -9,15 +9,15 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 
 const initialState = {
-  error: "",
-  success: null,
+  error: "" as string | null,
+  success: null as boolean | null,
 }
 
 export function AddMeterForm() {
   const [state, formAction] = useActionState(addElectricityMeter, initialState)
 
   useEffect(() => {
-    if (state.success) {
+    if (state.success === true) {
       toast.success("Elektromer bol úspešne pridaný!")
     } else if (state.error) {
       toast.error(state.error)

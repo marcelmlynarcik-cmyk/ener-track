@@ -50,7 +50,7 @@ export async function addElectricityMeter(previousState: any, formData: FormData
   const initial_value = parseFloat(formData.get('initial_value') as string)
 
   if (!name || !installation_date || isNaN(initial_value)) {
-    return { error: 'Všetky polia sú povinné.' }
+    return { error: 'Všetky polia sú povinné.', success: false }
   }
 
   const { error } = await supabase.from('electricity_meters').insert({
@@ -65,13 +65,14 @@ export async function addElectricityMeter(previousState: any, formData: FormData
       return {
         error:
           'Chyba pri pridávaní elektromera: Operácia porušila bezpečnostné pravidlá databázy. Skontrolujte politiky RLS (Row Level Security).',
+        success: false
       }
     }
-    return { error: `Chyba pri pridávaní elektromera: ${error.message}` }
+    return { error: `Chyba pri pridávaní elektromera: ${error.message}`, success: false }
   }
 
   revalidatePath('/electricity')
-  return { success: true }
+  return { success: true, error: "" }
 }
 
 export async function getProcessedElectricityReadings() {
@@ -258,7 +259,7 @@ export async function addElectricityReading(previousState: any, formData: FormDa
   const value = parseFloat(formData.get('value') as string);
 
   if (!meter_id || !reading_date || isNaN(value)) {
-    return { error: 'Všetky polia sú povinné.' };
+    return { error: 'Všetky polia sú povinné.', success: false };
   }
 
   const { error } = await supabase.from('electricity_readings').insert({
@@ -273,13 +274,14 @@ export async function addElectricityReading(previousState: any, formData: FormDa
       return {
         error:
           'Chyba pri pridávaní odpočtu elektriny: Operácia porušila bezpečnostné pravidlá databázy. Skontrolujte politiky RLS (Row Level Security).',
+        success: false
       }
     }
-    return { error: `Chyba pri pridávaní odpočtu elektriny: ${error.message}` }
+    return { error: `Chyba pri pridávaní odpočtu elektriny: ${error.message}`, success: false }
   }
   revalidatePath('/electricity');
   revalidatePath(`/electricity/${meter_id}`);
-  return { success: true };
+  return { success: true, error: "" };
 }
 
 export async function getDashboardConsumptionData(meterId: string) {
@@ -395,7 +397,7 @@ export async function updateElectricityReading(previousState: any, formData: For
   const value = parseFloat(formData.get('value') as string);
 
   if (!readingId || !meter_id || !reading_date || isNaN(value)) {
-    return { error: 'Všetky polia sú povinné.' };
+    return { error: 'Všetky polia sú povinné.', success: false };
   }
 
   const { error } = await supabase
@@ -409,14 +411,14 @@ export async function updateElectricityReading(previousState: any, formData: For
 
   if (error) {
     console.error('Chyba pri úprave odpočtu elektriny:', error);
-    return { error: `Chyba pri úprave odpočtu: ${error.message}` };
+    return { error: `Chyba pri úprave odpočtu: ${error.message}`, success: false };
   }
 
   revalidatePath('/electricity');
   revalidatePath(`/electricity/${meter_id}`); // Also revalidate the meter details page
   revalidatePath(`/electricity/edit-reading/${readingId}`);
 
-  return { success: true };
+  return { success: true, error: "" };
 }
 
 export async function getElectricityConsumptionChartData(meterId: string) {
