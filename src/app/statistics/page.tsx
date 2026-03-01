@@ -14,8 +14,6 @@ import {
   Line,
   Area,
   AreaChart,
-  Defs,
-  LinearGradient,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
