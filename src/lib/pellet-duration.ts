@@ -1,4 +1,6 @@
 export const PELLET_DAILY_AVERAGE_LOOKBACK_DAYS = 30;
+export const PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS = 120;
+export const PELLET_RECENT_TEMPERATURE_WINDOW_DAYS = 7;
 
 export function formatEstimatedPelletDuration(days: number | null): string {
   if (days === null) return "N/A";

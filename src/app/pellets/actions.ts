@@ -3,7 +3,11 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { format, parseISO } from 'date-fns';
-import { PELLET_DAILY_AVERAGE_LOOKBACK_DAYS } from '@/lib/pellet-duration';
+import {
+  PELLET_DAILY_AVERAGE_LOOKBACK_DAYS,
+  PELLET_RECENT_TEMPERATURE_WINDOW_DAYS,
+  PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS,
+} from '@/lib/pellet-duration';
 
 export async function getPelletPurchases() {
   const supabase = getSupabaseServerClient();
@@ -502,6 +506,41 @@ export async function getMonthlyPelletConsumptionChartData() {
 async function getEstimatedPelletDurationWithAverage() {
     const supabase = getSupabaseServerClient();
 
+    const getTemperatureAdjustedDailyConsumption = (
+      entries: { quantity_kg: number; average_temperature_celsius: number | null }[],
+      fallbackAverageDailyConsumption: number
+    ) => {
+      const withTemperature = entries.filter(
+        (entry) => entry.average_temperature_celsius !== null
+      ) as { quantity_kg: number; average_temperature_celsius: number }[];
+
+      if (withTemperature.length < 5) return fallbackAverageDailyConsumption;
+
+      const recentTemperatureEntries = withTemperature.slice(-PELLET_RECENT_TEMPERATURE_WINDOW_DAYS);
+      const currentTemperature =
+        recentTemperatureEntries.reduce((sum, entry) => sum + entry.average_temperature_celsius, 0) /
+        recentTemperatureEntries.length;
+
+      if (!Number.isFinite(currentTemperature)) return fallbackAverageDailyConsumption;
+
+      // Weighted comparison: historical days with similar temperature have higher impact.
+      let weightedConsumptionSum = 0;
+      let weightSum = 0;
+
+      for (const entry of withTemperature) {
+        const delta = Math.abs(entry.average_temperature_celsius - currentTemperature);
+        const weight = 1 / (1 + delta);
+        weightedConsumptionSum += entry.quantity_kg * weight;
+        weightSum += weight;
+      }
+
+      if (weightSum <= 0) return fallbackAverageDailyConsumption;
+
+      const temperatureAdjusted = weightedConsumptionSum / weightSum;
+      const blendedDailyConsumption = (temperatureAdjusted * 0.6) + (fallbackAverageDailyConsumption * 0.4);
+      return blendedDailyConsumption > 0 ? blendedDailyConsumption : fallbackAverageDailyConsumption;
+    };
+
     // 1. Fetch current stock (sum of remaining quantities in batches)
     const { data: stockBatches, error: stockError } = await supabase
         .from('pellet_stock_batches')
@@ -519,7 +558,7 @@ async function getEstimatedPelletDurationWithAverage() {
         return { estimatedDurationDays: 0, averageDailyConsumption: null };
     }
 
-    // 2. Fetch historical consumption for a fixed look-back period (e.g., last 30 days)
+    // 2. Fetch historical consumption for baseline average (last 30 days)
     const periodStart = new Date(Date.now() - PELLET_DAILY_AVERAGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
     const periodStartFormatted = format(periodStart, 'yyyy-MM-dd');
 
@@ -549,7 +588,25 @@ async function getEstimatedPelletDurationWithAverage() {
         return { estimatedDurationDays: null, averageDailyConsumption: null };
     }
 
-    const estimatedDurationDays = currentStock / averageDailyConsumption;
+    // 3. Temperature-adjusted projected daily consumption from longer history.
+    const tempModelStart = new Date(Date.now() - PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+    const tempModelStartFormatted = format(tempModelStart, 'yyyy-MM-dd');
+
+    const { data: temperatureModelData, error: temperatureModelError } = await supabase
+      .from('pellet_consumption')
+      .select('quantity_kg, average_temperature_celsius')
+      .gte('consumption_date', tempModelStartFormatted)
+      .order('consumption_date', { ascending: true });
+
+    if (temperatureModelError) {
+      console.error('Error fetching pellet temperature model data for duration estimate:', temperatureModelError);
+    }
+
+    const projectedDailyConsumption = temperatureModelData && temperatureModelData.length > 0
+      ? getTemperatureAdjustedDailyConsumption(temperatureModelData, averageDailyConsumption)
+      : averageDailyConsumption;
+
+    const estimatedDurationDays = currentStock / projectedDailyConsumption;
 
     return { estimatedDurationDays, averageDailyConsumption };
 }
