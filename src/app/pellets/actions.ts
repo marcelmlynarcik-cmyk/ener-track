@@ -380,7 +380,7 @@ export async function getPelletOverviewData() {
         console.error('Error fetching last pellet consumption:', lastConsumptionError);
     }
 
-    const { estimatedDurationDays, averageDailyConsumption } = await getEstimatedPelletDurationWithAverage();
+    const { estimatedDurationDays, averageDailyConsumption, forecastDurationByDay } = await getEstimatedPelletDurationWithAverage();
 
     return {
         currentStock,
@@ -389,6 +389,7 @@ export async function getPelletOverviewData() {
         lastConsumption: lastConsumptionData || null,
         estimatedPelletDuration: estimatedDurationDays,
         averageDailyConsumption,
+        forecastDurationByDay,
     };
 }
 
@@ -508,12 +509,12 @@ export async function getMonthlyPelletConsumptionChartData() {
 async function getEstimatedPelletDurationWithAverage() {
     const supabase = getSupabaseServerClient();
 
-    const getForecastAverageTemperature = async () => {
+    const getForecastTemperatures = async () => {
       const latitude = Number(process.env.PELLET_LOCATION_LAT ?? DEFAULT_PELLET_LOCATION.latitude);
       const longitude = Number(process.env.PELLET_LOCATION_LON ?? DEFAULT_PELLET_LOCATION.longitude);
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return null;
+        return [];
       }
 
       const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
@@ -528,25 +529,33 @@ async function getEstimatedPelletDurationWithAverage() {
           next: { revalidate: 60 * 60 * 6 }, // Refresh forecast every 6 hours.
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) return [];
         const data = await response.json();
         const values = data?.daily?.temperature_2m_mean;
-        if (!Array.isArray(values) || values.length === 0) return null;
+        const days = data?.daily?.time;
+        if (!Array.isArray(values) || !Array.isArray(days) || values.length === 0 || days.length === 0) return [];
 
-        const validValues = values.filter((value: unknown) => Number.isFinite(value as number)) as number[];
-        if (validValues.length === 0) return null;
+        const result = [];
+        for (let i = 0; i < Math.min(values.length, days.length); i++) {
+          if (Number.isFinite(values[i]) && typeof days[i] === 'string') {
+            result.push({
+              date: days[i],
+              temperatureCelsius: values[i] as number,
+            });
+          }
+        }
 
-        return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
+        return result;
       } catch (error) {
         console.error('Error fetching weather forecast for pellet duration estimate:', error);
-        return null;
+        return [];
       }
     };
 
     const getTemperatureAdjustedDailyConsumption = (
       entries: { quantity_kg: number; average_temperature_celsius: number | null }[],
       fallbackAverageDailyConsumption: number,
-      forecastAverageTemperature: number | null
+      targetTemperature: number | null
     ) => {
       const withTemperature = entries.filter(
         (entry) => entry.average_temperature_celsius !== null
@@ -559,16 +568,16 @@ async function getEstimatedPelletDurationWithAverage() {
         recentTemperatureEntries.reduce((sum, entry) => sum + entry.average_temperature_celsius, 0) /
         recentTemperatureEntries.length;
 
-      const targetTemperature = forecastAverageTemperature ?? historicalCurrentTemperature;
+      const effectiveTargetTemperature = targetTemperature ?? historicalCurrentTemperature;
 
-      if (!Number.isFinite(targetTemperature)) return fallbackAverageDailyConsumption;
+      if (!Number.isFinite(effectiveTargetTemperature)) return fallbackAverageDailyConsumption;
 
       // Weighted comparison: historical days with similar temperature have higher impact.
       let weightedConsumptionSum = 0;
       let weightSum = 0;
 
       for (const entry of withTemperature) {
-        const delta = Math.abs(entry.average_temperature_celsius - targetTemperature);
+        const delta = Math.abs(entry.average_temperature_celsius - effectiveTargetTemperature);
         const weight = 1 / (1 + delta);
         weightedConsumptionSum += entry.quantity_kg * weight;
         weightSum += weight;
@@ -591,11 +600,11 @@ async function getEstimatedPelletDurationWithAverage() {
 
     if (stockError) {
         console.error('Error fetching current pellet stock for duration estimate:', stockError);
-        return { estimatedDurationDays: null, averageDailyConsumption: null };
+        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
     }
 
     if (currentStock === 0) {
-        return { estimatedDurationDays: 0, averageDailyConsumption: null };
+        return { estimatedDurationDays: 0, averageDailyConsumption: null, forecastDurationByDay: [] };
     }
 
     // 2. Fetch historical consumption for baseline average (last 30 days)
@@ -610,11 +619,11 @@ async function getEstimatedPelletDurationWithAverage() {
 
     if (consumptionError) {
         console.error('Error fetching recent pellet consumption for duration estimate:', consumptionError);
-        return { estimatedDurationDays: null, averageDailyConsumption: null };
+        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
     }
 
     if (!recentConsumptionData || recentConsumptionData.length === 0) {
-        return { estimatedDurationDays: null, averageDailyConsumption: null };
+        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
     }
 
     let totalConsumptionInPeriod = 0;
@@ -625,7 +634,7 @@ async function getEstimatedPelletDurationWithAverage() {
     const averageDailyConsumption = totalConsumptionInPeriod / PELLET_DAILY_AVERAGE_LOOKBACK_DAYS;
 
     if (averageDailyConsumption <= 0) {
-        return { estimatedDurationDays: null, averageDailyConsumption: null };
+        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
     }
 
     // 3. Temperature-adjusted projected daily consumption from longer history.
@@ -642,18 +651,43 @@ async function getEstimatedPelletDurationWithAverage() {
       console.error('Error fetching pellet temperature model data for duration estimate:', temperatureModelError);
     }
 
-    const forecastAverageTemperature = await getForecastAverageTemperature();
-    const projectedDailyConsumption = temperatureModelData && temperatureModelData.length > 0
-      ? getTemperatureAdjustedDailyConsumption(
-          temperatureModelData,
-          averageDailyConsumption,
-          forecastAverageTemperature
+    const forecastTemperatures = await getForecastTemperatures();
+
+    const forecastDurationByDay = forecastTemperatures.map((forecastDay) => {
+      const projectedDailyConsumption = temperatureModelData && temperatureModelData.length > 0
+        ? getTemperatureAdjustedDailyConsumption(
+            temperatureModelData,
+            averageDailyConsumption,
+            forecastDay.temperatureCelsius
+          )
+        : averageDailyConsumption;
+
+      return {
+        date: forecastDay.date,
+        temperatureCelsius: forecastDay.temperatureCelsius,
+        projectedDailyConsumption,
+        estimatedDurationDays: currentStock / projectedDailyConsumption,
+      };
+    });
+
+    const estimatedDurationDays = forecastDurationByDay.length > 0
+      ? currentStock / (
+          forecastDurationByDay.reduce((sum, day) => sum + day.projectedDailyConsumption, 0) /
+          forecastDurationByDay.length
         )
-      : averageDailyConsumption;
+      : (
+          currentStock / (
+            temperatureModelData && temperatureModelData.length > 0
+              ? getTemperatureAdjustedDailyConsumption(
+                  temperatureModelData,
+                  averageDailyConsumption,
+                  null
+                )
+              : averageDailyConsumption
+          )
+        );
 
-    const estimatedDurationDays = currentStock / projectedDailyConsumption;
-
-    return { estimatedDurationDays, averageDailyConsumption };
+    return { estimatedDurationDays, averageDailyConsumption, forecastDurationByDay };
 }
 
 export async function getEstimatedPelletDuration() {
