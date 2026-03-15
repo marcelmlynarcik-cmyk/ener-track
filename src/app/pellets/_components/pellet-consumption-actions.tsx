@@ -8,7 +8,6 @@ interface Consumption {
   consumption_date: string;
   quantity_kg: number;
   cost_czk: number;
-  average_temperature_celsius: number | null;
   created_at: string;
 }
 

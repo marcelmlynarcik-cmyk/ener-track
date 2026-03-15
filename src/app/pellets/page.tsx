@@ -3,7 +3,7 @@ import {
   getPelletPurchases,
   getPelletConsumption,
 } from './actions';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { Package, Plus } from 'lucide-react';
 
 import { AddPelletPurchaseForm } from './_components/add-pellet-purchase-form';
@@ -18,8 +18,7 @@ export default async function PelletsPage() {
     averagePricePerKg, 
     lastConsumption, 
     estimatedPelletDuration,
-    averageDailyConsumption,
-    forecastDurationByDay,
+    averageDailyConsumption
   } = await getPelletOverviewData();
   
   const purchases = await getPelletPurchases();
@@ -103,18 +102,6 @@ export default async function PelletsPage() {
               <p className="text-xl font-semibold text-slate-900">
                 {formatEstimatedPelletDuration(estimatedPelletDuration)}
               </p>
-              {forecastDurationByDay.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-slate-500">Predpoveď na 5 dní</summary>
-                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                    {forecastDurationByDay.map((day) => (
-                      <li key={day.date}>
-                        {format(parseISO(day.date), 'dd.MM')}: {day.temperatureCelsius.toFixed(1)} °C -> {day.estimatedDurationDays.toFixed(0)} dní
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
             </div>
           </div>
         </div>

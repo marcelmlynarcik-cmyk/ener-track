@@ -51,7 +51,7 @@ export function AddPelletConsumptionForm({ trigger }: AddPelletConsumptionFormPr
         <DialogHeader>
           <DialogTitle>Zaznamenať spotrebu peliet</DialogTitle>
           <DialogDescription>
-            Zaznamenajte spotrebované množstvo peliet a priemernú vonkajšiu teplotu.
+            Zaznamenajte spotrebované množstvo peliet.
           </DialogDescription>
         </DialogHeader>
         <form action={formAction} className="grid gap-4 py-4">
@@ -66,12 +66,6 @@ export function AddPelletConsumptionForm({ trigger }: AddPelletConsumptionFormPr
               Množstvo (kg)
             </Label>
             <Input type="number" id="quantity_kg" name="quantity_kg" step="0.01" required min="0.01" className="col-span-3" />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="average_temperature_celsius" className="text-right">
-              Priemerná teplota (°C)
-            </Label>
-            <Input type="number" id="average_temperature_celsius" name="average_temperature_celsius" step="0.1" className="col-span-3" />
           </div>
           <Button type="submit">Zaznamenať spotrebu</Button>
         </form>

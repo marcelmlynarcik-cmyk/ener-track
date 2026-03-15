@@ -23,7 +23,6 @@ interface PelletConsumption {
   consumption_date: string;
   quantity_kg: number;
   cost_czk: number;
-  average_temperature_celsius: number | null;
   created_at: string;
 }
 
@@ -87,19 +86,6 @@ export function EditPelletConsumptionForm({ consumption }: EditPelletConsumption
               className="col-span-3"
               required
               min="0.01"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="average_temperature_celsius" className="text-right">
-              Priemerná teplota (°C)
-            </Label>
-            <Input
-              id="average_temperature_celsius"
-              name="average_temperature_celsius"
-              type="number"
-              step="0.1"
-              defaultValue={consumption.average_temperature_celsius ?? ''} // Use nullish coalescing for default value
-              className="col-span-3"
             />
           </div>
           <Button type="submit">Uložiť zmeny</Button>

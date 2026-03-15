@@ -3,13 +3,7 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { format, parseISO } from 'date-fns';
-import {
-  DEFAULT_PELLET_LOCATION,
-  PELLET_DAILY_AVERAGE_LOOKBACK_DAYS,
-  PELLET_FORECAST_TEMPERATURE_DAYS,
-  PELLET_RECENT_TEMPERATURE_WINDOW_DAYS,
-  PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS,
-} from '@/lib/pellet-duration';
+import { PELLET_DAILY_AVERAGE_LOOKBACK_DAYS } from '@/lib/pellet-duration';
 
 export async function getPelletPurchases() {
   const supabase = getSupabaseServerClient();
@@ -201,10 +195,9 @@ export async function addPelletConsumption(
   const supabase = getSupabaseServerClient();
   const consumption_date = formData.get('consumption_date') as string;
   const quantity_kg = parseFloat(formData.get('quantity_kg') as string);
-  const average_temperature_celsius = parseFloat(formData.get('average_temperature_celsius') as string);
 
   // Validate input
-  if (!consumption_date || isNaN(quantity_kg) || quantity_kg <= 0 || isNaN(average_temperature_celsius)) {
+  if (!consumption_date || isNaN(quantity_kg) || quantity_kg <= 0) {
     return { success: false, message: 'Invalid input for pellet consumption.' };
   }
 
@@ -254,7 +247,7 @@ export async function addPelletConsumption(
   // Add consumption entry
   const { error: consumptionError } = await supabase
     .from('pellet_consumption')
-    .insert({ consumption_date, quantity_kg, cost_czk: totalCost, average_temperature_celsius }) // Changed cost_eur to cost_czk
+    .insert({ consumption_date, quantity_kg, cost_czk: totalCost })
     .select();
 
   if (consumptionError) {
@@ -275,17 +268,16 @@ export async function updatePelletConsumption(
     const id = formData.get('id') as string;
     const consumption_date = formData.get('consumption_date') as string;
     const quantity_kg = parseFloat(formData.get('quantity_kg') as string);
-    const average_temperature_celsius = parseFloat(formData.get('average_temperature_celsius') as string);
   
     // Validate input
-    if (!id || !consumption_date || isNaN(quantity_kg) || quantity_kg <= 0 || isNaN(average_temperature_celsius)) {
+    if (!id || !consumption_date || isNaN(quantity_kg) || quantity_kg <= 0) {
       return { success: false, message: 'Invalid input for pellet consumption update.' };
     }
   
     // Update the pellet_consumption entry
     const { error: consumptionUpdateError } = await supabase
       .from('pellet_consumption')
-      .update({ consumption_date, quantity_kg, cost_czk: formData.get('cost_czk') as string, average_temperature_celsius }) // Changed cost_eur to cost_czk
+      .update({ consumption_date, quantity_kg })
       .eq('id', id);
   
     if (consumptionUpdateError) {
@@ -380,7 +372,7 @@ export async function getPelletOverviewData() {
         console.error('Error fetching last pellet consumption:', lastConsumptionError);
     }
 
-    const { estimatedDurationDays, averageDailyConsumption, forecastDurationByDay } = await getEstimatedPelletDurationWithAverage();
+    const { estimatedDurationDays, averageDailyConsumption } = await getEstimatedPelletDurationWithAverage();
 
     return {
         currentStock,
@@ -389,7 +381,6 @@ export async function getPelletOverviewData() {
         lastConsumption: lastConsumptionData || null,
         estimatedPelletDuration: estimatedDurationDays,
         averageDailyConsumption,
-        forecastDurationByDay,
     };
 }
 
@@ -397,7 +388,7 @@ export async function getMonthlyPelletConsumptionChartData() {
     const supabase = getSupabaseServerClient();
     const { data: consumptionData, error } = await supabase
       .from('pellet_consumption')
-      .select('consumption_date, quantity_kg, average_temperature_celsius, cost_czk') // NEW: Select cost_czk
+      .select('consumption_date, quantity_kg, cost_czk')
       .order('consumption_date', { ascending: true });
   
     if (error) {
@@ -406,17 +397,15 @@ export async function getMonthlyPelletConsumptionChartData() {
     }
   
     // Group by month and year
-    const monthlyConsumptionMap = new Map<string, { quantity_kg: number; total_temp: number; count: number; total_cost: number }>(); // NEW: total_cost
+    const monthlyConsumptionMap = new Map<string, { quantity_kg: number; total_cost: number }>();
   
     for (const entry of consumptionData) {
       const date = parseISO(entry.consumption_date);
-      const monthYear = format(date, 'MM/yyyy'); // e.g., "01/2023"
-      const current = monthlyConsumptionMap.get(monthYear) || { quantity_kg: 0, total_temp: 0, count: 0, total_cost: 0 }; // NEW: total_cost
+      const monthYear = format(date, 'MM/yyyy');
+      const current = monthlyConsumptionMap.get(monthYear) || { quantity_kg: 0, total_cost: 0 };
       monthlyConsumptionMap.set(monthYear, {
         quantity_kg: current.quantity_kg + entry.quantity_kg,
-        total_temp: current.total_temp + (entry.average_temperature_celsius ?? 0),
-        count: current.count + (entry.average_temperature_celsius !== null ? 1 : 0),
-        total_cost: current.total_cost + (entry.cost_czk ?? 0), // NEW: total_cost
+        total_cost: current.total_cost + (entry.cost_czk ?? 0),
       });
     }
   
@@ -425,8 +414,7 @@ export async function getMonthlyPelletConsumptionChartData() {
       .map(([monthYear, data]) => ({
         monthYear,
         quantity_kg: parseFloat(data.quantity_kg.toFixed(2)),
-        average_temperature_celsius: data.count > 0 ? parseFloat((data.total_temp / data.count).toFixed(2)) : null,
-        total_cost_czk: parseFloat(data.total_cost.toFixed(2)), // NEW: total_cost_czk
+        total_cost_czk: parseFloat(data.total_cost.toFixed(2)),
       }))
       .sort((a, b) => {
         const [monthA, yearA] = a.monthYear.split('/');
@@ -507,228 +495,63 @@ export async function getMonthlyPelletConsumptionChartData() {
   }
 
 async function getEstimatedPelletDurationWithAverage() {
-    const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServerClient();
 
-    const getForecastTemperatures = async () => {
-      const latitude = Number(process.env.PELLET_LOCATION_LAT ?? DEFAULT_PELLET_LOCATION.latitude);
-      const longitude = Number(process.env.PELLET_LOCATION_LON ?? DEFAULT_PELLET_LOCATION.longitude);
+  // 1. Fetch current stock (sum of remaining quantities in batches)
+  const { data: stockBatches, error: stockError } = await supabase
+    .from('pellet_stock_batches')
+    .select('remaining_quantity_kg')
+    .gt('remaining_quantity_kg', 0);
 
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return [];
-      }
+  const currentStock = stockBatches?.reduce((sum, batch) => sum + batch.remaining_quantity_kg, 0) || 0;
 
-      const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
-      forecastUrl.searchParams.set('latitude', String(latitude));
-      forecastUrl.searchParams.set('longitude', String(longitude));
-      forecastUrl.searchParams.set('daily', 'temperature_2m_mean');
-      forecastUrl.searchParams.set('forecast_days', String(PELLET_FORECAST_TEMPERATURE_DAYS));
-      forecastUrl.searchParams.set('timezone', 'auto');
+  if (stockError) {
+    console.error('Error fetching current pellet stock for duration estimate:', stockError);
+    return { estimatedDurationDays: null, averageDailyConsumption: null };
+  }
 
-      try {
-        const response = await fetch(forecastUrl.toString(), {
-          next: { revalidate: 60 * 60 * 6 }, // Refresh forecast every 6 hours.
-        });
+  if (currentStock === 0) {
+    return { estimatedDurationDays: 0, averageDailyConsumption: null };
+  }
 
-        if (!response.ok) return [];
-        const data = await response.json();
-        const values = data?.daily?.temperature_2m_mean;
-        const days = data?.daily?.time;
-        if (!Array.isArray(values) || !Array.isArray(days) || values.length === 0 || days.length === 0) return [];
+  // 2. Fetch historical consumption for a fixed look-back period (last 30 days)
+  const periodStart = new Date(Date.now() - PELLET_DAILY_AVERAGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const periodStartFormatted = format(periodStart, 'yyyy-MM-dd');
 
-        const result = [];
-        for (let i = 0; i < Math.min(values.length, days.length); i++) {
-          if (Number.isFinite(values[i]) && typeof days[i] === 'string') {
-            result.push({
-              date: days[i],
-              temperatureCelsius: values[i] as number,
-            });
-          }
-        }
+  const { data: recentConsumptionData, error: consumptionError } = await supabase
+    .from('pellet_consumption')
+    .select('quantity_kg')
+    .gte('consumption_date', periodStartFormatted)
+    .order('consumption_date', { ascending: true });
 
-        return result;
-      } catch (error) {
-        console.error('Error fetching weather forecast for pellet duration estimate:', error);
-        return [];
-      }
-    };
+  if (consumptionError) {
+    console.error('Error fetching recent pellet consumption for duration estimate:', consumptionError);
+    return { estimatedDurationDays: null, averageDailyConsumption: null };
+  }
 
-    const getTemperatureAdjustedDailyConsumption = (
-      entries: { quantity_kg: number; average_temperature_celsius: number | null }[],
-      fallbackAverageDailyConsumption: number,
-      targetTemperature: number | null
-    ) => {
-      const withTemperature = entries.filter(
-        (entry) => entry.average_temperature_celsius !== null
-      ) as { quantity_kg: number; average_temperature_celsius: number }[];
+  if (!recentConsumptionData || recentConsumptionData.length === 0) {
+    return { estimatedDurationDays: null, averageDailyConsumption: null };
+  }
 
-      if (withTemperature.length < 5) return fallbackAverageDailyConsumption;
+  let totalConsumptionInPeriod = 0;
+  for (const entry of recentConsumptionData) {
+    totalConsumptionInPeriod += entry.quantity_kg;
+  }
 
-      const recentTemperatureEntries = withTemperature.slice(-PELLET_RECENT_TEMPERATURE_WINDOW_DAYS);
-      const historicalCurrentTemperature =
-        recentTemperatureEntries.reduce((sum, entry) => sum + entry.average_temperature_celsius, 0) /
-        recentTemperatureEntries.length;
+  const averageDailyConsumption = totalConsumptionInPeriod / PELLET_DAILY_AVERAGE_LOOKBACK_DAYS;
 
-      const effectiveTargetTemperature = targetTemperature ?? historicalCurrentTemperature;
+  if (averageDailyConsumption <= 0) {
+    return { estimatedDurationDays: null, averageDailyConsumption: null };
+  }
 
-      if (!Number.isFinite(effectiveTargetTemperature)) return fallbackAverageDailyConsumption;
+  const estimatedDurationDays = currentStock / averageDailyConsumption;
 
-      // Weighted comparison: historical days with similar temperature have higher impact.
-      let weightedConsumptionSum = 0;
-      let weightSum = 0;
-
-      for (const entry of withTemperature) {
-        const delta = Math.abs(entry.average_temperature_celsius - effectiveTargetTemperature);
-        const weight = 1 / (1 + delta);
-        weightedConsumptionSum += entry.quantity_kg * weight;
-        weightSum += weight;
-      }
-
-      if (weightSum <= 0) return fallbackAverageDailyConsumption;
-
-      const temperatureAdjusted = weightedConsumptionSum / weightSum;
-      const blendedDailyConsumption = (temperatureAdjusted * 0.6) + (fallbackAverageDailyConsumption * 0.4);
-      return blendedDailyConsumption > 0 ? blendedDailyConsumption : fallbackAverageDailyConsumption;
-    };
-
-    // 1. Fetch current stock (sum of remaining quantities in batches)
-    const { data: stockBatches, error: stockError } = await supabase
-        .from('pellet_stock_batches')
-        .select('remaining_quantity_kg')
-        .gt('remaining_quantity_kg', 0);
-
-    const currentStock = stockBatches?.reduce((sum, batch) => sum + batch.remaining_quantity_kg, 0) || 0;
-
-    if (stockError) {
-        console.error('Error fetching current pellet stock for duration estimate:', stockError);
-        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
-    }
-
-    if (currentStock === 0) {
-        return { estimatedDurationDays: 0, averageDailyConsumption: null, forecastDurationByDay: [] };
-    }
-
-    // 2. Fetch historical consumption for baseline average (last 30 days)
-    const periodStart = new Date(Date.now() - PELLET_DAILY_AVERAGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-    const periodStartFormatted = format(periodStart, 'yyyy-MM-dd');
-
-    const { data: recentConsumptionData, error: consumptionError } = await supabase
-        .from('pellet_consumption')
-        .select('quantity_kg')
-        .gte('consumption_date', periodStartFormatted)
-        .order('consumption_date', { ascending: true });
-
-    if (consumptionError) {
-        console.error('Error fetching recent pellet consumption for duration estimate:', consumptionError);
-        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
-    }
-
-    if (!recentConsumptionData || recentConsumptionData.length === 0) {
-        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
-    }
-
-    let totalConsumptionInPeriod = 0;
-    for (const entry of recentConsumptionData) {
-        totalConsumptionInPeriod += entry.quantity_kg;
-    }
-
-    const averageDailyConsumption = totalConsumptionInPeriod / PELLET_DAILY_AVERAGE_LOOKBACK_DAYS;
-
-    if (averageDailyConsumption <= 0) {
-        return { estimatedDurationDays: null, averageDailyConsumption: null, forecastDurationByDay: [] };
-    }
-
-    // 3. Temperature-adjusted projected daily consumption from longer history.
-    const tempModelStart = new Date(Date.now() - PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-    const tempModelStartFormatted = format(tempModelStart, 'yyyy-MM-dd');
-
-    const { data: temperatureModelData, error: temperatureModelError } = await supabase
-      .from('pellet_consumption')
-      .select('quantity_kg, average_temperature_celsius')
-      .gte('consumption_date', tempModelStartFormatted)
-      .order('consumption_date', { ascending: true });
-
-    if (temperatureModelError) {
-      console.error('Error fetching pellet temperature model data for duration estimate:', temperatureModelError);
-    }
-
-    const forecastTemperatures = await getForecastTemperatures();
-
-    const forecastDurationByDay = forecastTemperatures.map((forecastDay) => {
-      const projectedDailyConsumption = temperatureModelData && temperatureModelData.length > 0
-        ? getTemperatureAdjustedDailyConsumption(
-            temperatureModelData,
-            averageDailyConsumption,
-            forecastDay.temperatureCelsius
-          )
-        : averageDailyConsumption;
-
-      return {
-        date: forecastDay.date,
-        temperatureCelsius: forecastDay.temperatureCelsius,
-        projectedDailyConsumption,
-        estimatedDurationDays: currentStock / projectedDailyConsumption,
-      };
-    });
-
-    const estimatedDurationDays = forecastDurationByDay.length > 0
-      ? currentStock / (
-          forecastDurationByDay.reduce((sum, day) => sum + day.projectedDailyConsumption, 0) /
-          forecastDurationByDay.length
-        )
-      : (
-          currentStock / (
-            temperatureModelData && temperatureModelData.length > 0
-              ? getTemperatureAdjustedDailyConsumption(
-                  temperatureModelData,
-                  averageDailyConsumption,
-                  null
-                )
-              : averageDailyConsumption
-          )
-        );
-
-    return { estimatedDurationDays, averageDailyConsumption, forecastDurationByDay };
+  return { estimatedDurationDays, averageDailyConsumption };
 }
 
 export async function getEstimatedPelletDuration() {
     const { estimatedDurationDays } = await getEstimatedPelletDurationWithAverage();
     return estimatedDurationDays;
-}
-
-export async function getConsumptionTemperatureCorrelationChartData() {
-  const supabase = getSupabaseServerClient();
-
-  const { data: consumptionData, error: consumptionError } = await supabase
-    .from('pellet_consumption')
-    .select('consumption_date, quantity_kg, average_temperature_celsius')
-    .order('consumption_date', { ascending: true });
-
-  if (consumptionError) {
-    console.error('Error fetching pellet consumption for correlation chart:', consumptionError);
-    return [];
-  }
-
-  // Create a map to combine data by date
-  const combinedDataMap = new Map<string, { consumption_kg: number; average_temperature_celsius: number | null }>();
-
-  for (const entry of consumptionData) {
-    const date = entry.consumption_date;
-    combinedDataMap.set(date, {
-      consumption_kg: (combinedDataMap.get(date)?.consumption_kg || 0) + entry.quantity_kg,
-      average_temperature_celsius: entry.average_temperature_celsius ?? null,
-    });
-  }
-
-  // Convert map to array and sort by date
-  const chartData = Array.from(combinedDataMap.entries())
-    .map(([date, values]) => ({
-      date: format(parseISO(date), 'dd.MM.yyyy'),
-      consumption_kg: parseFloat(values.consumption_kg.toFixed(2)),
-      average_temperature_celsius: values.average_temperature_celsius,
-    }))
-    .sort((a, b) => parseISO(a.date.split('.').reverse().join('-')).getTime() - parseISO(b.date.split('.').reverse().join('-')).getTime());
-
-  return chartData;
 }
 
 export async function getYearlyPelletConsumptionChartData() {

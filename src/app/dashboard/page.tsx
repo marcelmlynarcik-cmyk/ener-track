@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Plus, Gauge, CloudLightning, Home, Package, Clock, Zap } from "lucide-react"; // Updated icons
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { sk } from "date-fns/locale";
 // Removed KpiCard import as it will be refactored or used differently
 
@@ -28,8 +28,7 @@ export default async function DashboardPage() {
     currentStock, 
     estimatedPelletDuration, 
     averageDailyConsumption, 
-    lastConsumption,
-    forecastDurationByDay,
+    lastConsumption
   } = await getPelletOverviewData();
 
   const lastUpdateDate = lastConsumption 
@@ -128,18 +127,6 @@ export default async function DashboardPage() {
               <p className="text-sm text-slate-500 mt-1">
                 Pri aktuálnom tempe spotreby
               </p>
-              {forecastDurationByDay.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-slate-500">Predpoveď na 5 dní</summary>
-                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                    {forecastDurationByDay.map((day) => (
-                      <li key={day.date}>
-                        {format(parseISO(day.date), "dd.MM", { locale: sk })}: {day.temperatureCelsius.toFixed(1)} °C -> {day.estimatedDurationDays.toFixed(0)} dní
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
             </div>
             {/* Actual Average Daily Consumption */}
             <p className="text-xs text-slate-500 mt-4">
