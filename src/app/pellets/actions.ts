@@ -4,7 +4,9 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { format, parseISO } from 'date-fns';
 import {
+  DEFAULT_PELLET_LOCATION,
   PELLET_DAILY_AVERAGE_LOOKBACK_DAYS,
+  PELLET_FORECAST_TEMPERATURE_DAYS,
   PELLET_RECENT_TEMPERATURE_WINDOW_DAYS,
   PELLET_TEMPERATURE_MODEL_LOOKBACK_DAYS,
 } from '@/lib/pellet-duration';
@@ -506,9 +508,45 @@ export async function getMonthlyPelletConsumptionChartData() {
 async function getEstimatedPelletDurationWithAverage() {
     const supabase = getSupabaseServerClient();
 
+    const getForecastAverageTemperature = async () => {
+      const latitude = Number(process.env.PELLET_LOCATION_LAT ?? DEFAULT_PELLET_LOCATION.latitude);
+      const longitude = Number(process.env.PELLET_LOCATION_LON ?? DEFAULT_PELLET_LOCATION.longitude);
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null;
+      }
+
+      const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
+      forecastUrl.searchParams.set('latitude', String(latitude));
+      forecastUrl.searchParams.set('longitude', String(longitude));
+      forecastUrl.searchParams.set('daily', 'temperature_2m_mean');
+      forecastUrl.searchParams.set('forecast_days', String(PELLET_FORECAST_TEMPERATURE_DAYS));
+      forecastUrl.searchParams.set('timezone', 'auto');
+
+      try {
+        const response = await fetch(forecastUrl.toString(), {
+          next: { revalidate: 60 * 60 * 6 }, // Refresh forecast every 6 hours.
+        });
+
+        if (!response.ok) return null;
+        const data = await response.json();
+        const values = data?.daily?.temperature_2m_mean;
+        if (!Array.isArray(values) || values.length === 0) return null;
+
+        const validValues = values.filter((value: unknown) => Number.isFinite(value as number)) as number[];
+        if (validValues.length === 0) return null;
+
+        return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
+      } catch (error) {
+        console.error('Error fetching weather forecast for pellet duration estimate:', error);
+        return null;
+      }
+    };
+
     const getTemperatureAdjustedDailyConsumption = (
       entries: { quantity_kg: number; average_temperature_celsius: number | null }[],
-      fallbackAverageDailyConsumption: number
+      fallbackAverageDailyConsumption: number,
+      forecastAverageTemperature: number | null
     ) => {
       const withTemperature = entries.filter(
         (entry) => entry.average_temperature_celsius !== null
@@ -517,18 +555,20 @@ async function getEstimatedPelletDurationWithAverage() {
       if (withTemperature.length < 5) return fallbackAverageDailyConsumption;
 
       const recentTemperatureEntries = withTemperature.slice(-PELLET_RECENT_TEMPERATURE_WINDOW_DAYS);
-      const currentTemperature =
+      const historicalCurrentTemperature =
         recentTemperatureEntries.reduce((sum, entry) => sum + entry.average_temperature_celsius, 0) /
         recentTemperatureEntries.length;
 
-      if (!Number.isFinite(currentTemperature)) return fallbackAverageDailyConsumption;
+      const targetTemperature = forecastAverageTemperature ?? historicalCurrentTemperature;
+
+      if (!Number.isFinite(targetTemperature)) return fallbackAverageDailyConsumption;
 
       // Weighted comparison: historical days with similar temperature have higher impact.
       let weightedConsumptionSum = 0;
       let weightSum = 0;
 
       for (const entry of withTemperature) {
-        const delta = Math.abs(entry.average_temperature_celsius - currentTemperature);
+        const delta = Math.abs(entry.average_temperature_celsius - targetTemperature);
         const weight = 1 / (1 + delta);
         weightedConsumptionSum += entry.quantity_kg * weight;
         weightSum += weight;
@@ -602,8 +642,13 @@ async function getEstimatedPelletDurationWithAverage() {
       console.error('Error fetching pellet temperature model data for duration estimate:', temperatureModelError);
     }
 
+    const forecastAverageTemperature = await getForecastAverageTemperature();
     const projectedDailyConsumption = temperatureModelData && temperatureModelData.length > 0
-      ? getTemperatureAdjustedDailyConsumption(temperatureModelData, averageDailyConsumption)
+      ? getTemperatureAdjustedDailyConsumption(
+          temperatureModelData,
+          averageDailyConsumption,
+          forecastAverageTemperature
+        )
       : averageDailyConsumption;
 
     const estimatedDurationDays = currentStock / projectedDailyConsumption;
