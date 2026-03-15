@@ -12,6 +12,11 @@ import {
   getDashboardConsumptionData,
 } from "@/app/electricity/actions";
 import { getPelletOverviewData } from "@/app/pellets/actions";
+import {
+  formatAverageDailyConsumption,
+  formatEstimatedPelletDuration,
+  getEstimatedPelletDurationColor,
+} from "@/lib/pellet-duration";
 
 export default async function DashboardPage() {
   const meters = await getElectricityMeters();
@@ -29,13 +34,6 @@ export default async function DashboardPage() {
   const lastUpdateDate = lastConsumption 
     ? format(new Date(lastConsumption.consumption_date), "dd. MM. yyyy", { locale: sk })
     : format(new Date(), "dd. MM. yyyy", { locale: sk });
-
-  const getDurationColor = (days: number | null) => {
-    if (days === null) return "text-slate-900";
-    if (days >= 14) return "text-emerald-600";
-    if (days >= 7) return "text-amber-500";
-    return "text-red-600";
-  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
@@ -123,8 +121,8 @@ export default async function DashboardPage() {
             {/* Estimated Duration Section */}
             <div>
               <p className="text-sm uppercase tracking-wide text-slate-500">Odhad výdrže</p>
-              <p className={`text-4xl font-bold tracking-tight mt-1 ${getDurationColor(estimatedPelletDuration)}`}>
-                {estimatedPelletDuration !== null ? `${estimatedPelletDuration.toFixed(0)}` : 'N/A'} dní
+              <p className={`text-4xl font-bold tracking-tight mt-1 ${getEstimatedPelletDurationColor(estimatedPelletDuration)}`}>
+                {formatEstimatedPelletDuration(estimatedPelletDuration)}
               </p>
               <p className="text-sm text-slate-500 mt-1">
                 Pri aktuálnom tempe spotreby
@@ -132,7 +130,7 @@ export default async function DashboardPage() {
             </div>
             {/* Actual Average Daily Consumption */}
             <p className="text-xs text-slate-500 mt-4">
-              Priemerná denná spotreba: {averageDailyConsumption ? averageDailyConsumption.toFixed(1) : 'N/A'} kg
+              Priemerná denná spotreba: {formatAverageDailyConsumption(averageDailyConsumption)}
             </p>
           </CardContent>
         </Card>

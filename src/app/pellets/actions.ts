@@ -3,6 +3,7 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { format, parseISO } from 'date-fns';
+import { PELLET_DAILY_AVERAGE_LOOKBACK_DAYS } from '@/lib/pellet-duration';
 
 export async function getPelletPurchases() {
   const supabase = getSupabaseServerClient();
@@ -519,8 +520,7 @@ async function getEstimatedPelletDurationWithAverage() {
     }
 
     // 2. Fetch historical consumption for a fixed look-back period (e.g., last 30 days)
-    const LAST_N_DAYS_FOR_AVERAGE = 30;
-    const periodStart = new Date(Date.now() - LAST_N_DAYS_FOR_AVERAGE * 24 * 60 * 60 * 1000);
+    const periodStart = new Date(Date.now() - PELLET_DAILY_AVERAGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
     const periodStartFormatted = format(periodStart, 'yyyy-MM-dd');
 
     const { data: recentConsumptionData, error: consumptionError } = await supabase
@@ -543,7 +543,7 @@ async function getEstimatedPelletDurationWithAverage() {
         totalConsumptionInPeriod += entry.quantity_kg;
     }
 
-    const averageDailyConsumption = totalConsumptionInPeriod / LAST_N_DAYS_FOR_AVERAGE;
+    const averageDailyConsumption = totalConsumptionInPeriod / PELLET_DAILY_AVERAGE_LOOKBACK_DAYS;
 
     if (averageDailyConsumption <= 0) {
         return { estimatedDurationDays: null, averageDailyConsumption: null };

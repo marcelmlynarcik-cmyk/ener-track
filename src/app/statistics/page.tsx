@@ -35,6 +35,15 @@ const MONTHS = [
 
 type ViewMode = 'monthly' | 'cumulative';
 
+const getOverlappingPeriodDays = (year: number, maxIndex: number) => {
+  const safeMaxIndex = Math.max(0, Math.min(maxIndex, 11));
+  let days = 0;
+  for (let month = 0; month <= safeMaxIndex; month++) {
+    days += new Date(year, month + 1, 0).getDate();
+  }
+  return days;
+};
+
 export default function StatisticsPage() {
   const [electricityData, setElectricityData] = useState<any>({});
   const [pelletData, setPelletData] = useState<any>({});
@@ -145,8 +154,9 @@ export default function StatisticsPage() {
 
   const pelletSummary = useMemo(() => {
     const monthlyPellet = processData(pelletData, yearA, yearB, 'monthly');
-    const { totalA, totalB } = getComparison(monthlyPellet);
-    const avgDaily = totalA / 365;
+    const { totalA, totalB, maxIndex } = getComparison(monthlyPellet);
+    const periodDays = getOverlappingPeriodDays(Number(yearA), maxIndex);
+    const avgDaily = periodDays > 0 ? totalA / periodDays : 0;
     const change = totalB !== 0 ? ((totalA - totalB) / totalB) * 100 : 0;
     return { totalA, avgDaily, change };
   }, [pelletData, yearA, yearB]);

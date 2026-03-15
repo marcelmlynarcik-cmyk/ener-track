@@ -10,6 +10,7 @@ import { AddPelletPurchaseForm } from './_components/add-pellet-purchase-form';
 import { AddPelletConsumptionForm } from './_components/add-pellet-consumption-form';
 import { PelletHistory } from './_components/pellet-history';
 import { Button } from '@/components/ui/button';
+import { formatAverageDailyConsumption, formatEstimatedPelletDuration } from '@/lib/pellet-duration';
 
 export default async function PelletsPage() {
   const { 
@@ -83,7 +84,7 @@ export default async function PelletsPage() {
             <div className="md:pr-8 space-y-1">
               <p className="text-sm text-slate-400">Priemerná denná spotreba</p>
               <p className="text-xl font-semibold text-slate-900">
-                {averageDailyConsumption ? `${averageDailyConsumption.toFixed(1)} kg` : 'N/A'}
+                {formatAverageDailyConsumption(averageDailyConsumption)}
               </p>
             </div>
 
@@ -99,7 +100,7 @@ export default async function PelletsPage() {
             <div className="md:pl-8 space-y-1">
               <p className="text-sm text-slate-400">Odhad výdrže</p>
               <p className="text-xl font-semibold text-slate-900">
-                {estimatedPelletDuration ? `${estimatedPelletDuration.toFixed(0)} dní` : 'N/A'}
+                {formatEstimatedPelletDuration(estimatedPelletDuration)}
               </p>
             </div>
           </div>
