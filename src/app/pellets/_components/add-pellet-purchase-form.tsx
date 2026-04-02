@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { addPelletPurchase } from '../actions';
 import { format } from 'date-fns';
@@ -20,6 +21,16 @@ import { PlusCircle } from 'lucide-react'; // Icon for adding
 
 interface AddPelletPurchaseFormProps {
   trigger?: React.ReactNode;
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Ukladám...' : 'Pridať nákup'}
+    </Button>
+  );
 }
 
 export function AddPelletPurchaseForm({ trigger }: AddPelletPurchaseFormProps) {
@@ -73,7 +84,7 @@ export function AddPelletPurchaseForm({ trigger }: AddPelletPurchaseFormProps) {
             </Label>
             <Input type="number" id="price_per_kg" name="price_per_kg" step="0.01" required min="0" className="col-span-3" />
           </div>
-          <Button type="submit">Pridať nákup</Button>
+          <SubmitButton />
         </form>
       </DialogContent>
     </Dialog>

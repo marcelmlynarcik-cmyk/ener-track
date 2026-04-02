@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { updatePelletPurchase } from '../actions';
 import { format } from 'date-fns';
@@ -28,6 +29,16 @@ interface PelletPurchase {
 
 interface EditPelletPurchaseFormProps {
   purchase: PelletPurchase;
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Ukladám...' : 'Uložiť zmeny'}
+    </Button>
+  );
 }
 
 export function EditPelletPurchaseForm({ purchase }: EditPelletPurchaseFormProps) {
@@ -102,7 +113,7 @@ export function EditPelletPurchaseForm({ purchase }: EditPelletPurchaseFormProps
               min="0"
             />
           </div>
-          <Button type="submit">Uložiť zmeny</Button>
+          <SubmitButton />
         </form>
       </DialogContent>
     </Dialog>

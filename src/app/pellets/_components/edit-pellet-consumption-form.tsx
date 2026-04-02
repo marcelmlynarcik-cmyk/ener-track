@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { updatePelletConsumption } from '../actions';
 import { format } from 'date-fns';
@@ -28,6 +29,16 @@ interface PelletConsumption {
 
 interface EditPelletConsumptionFormProps {
   consumption: PelletConsumption;
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Ukladám...' : 'Uložiť zmeny'}
+    </Button>
+  );
 }
 
 export function EditPelletConsumptionForm({ consumption }: EditPelletConsumptionFormProps) {
@@ -88,7 +99,7 @@ export function EditPelletConsumptionForm({ consumption }: EditPelletConsumption
               min="0.01"
             />
           </div>
-          <Button type="submit">Uložiť zmeny</Button>
+          <SubmitButton />
         </form>
       </DialogContent>
     </Dialog>

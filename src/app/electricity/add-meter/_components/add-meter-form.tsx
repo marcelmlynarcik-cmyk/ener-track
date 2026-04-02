@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useActionState } from "react"
+import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import { addElectricityMeter } from "@/app/electricity/actions"
 import { Button } from "@/components/ui/button"
@@ -11,6 +12,16 @@ import { Card, CardContent } from "@/components/ui/card"
 const initialState = {
   error: "" as string | null,
   success: null as boolean | null,
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? "Ukladám..." : "Pridať merač"}
+    </Button>
+  )
 }
 
 export function AddMeterForm() {
@@ -52,12 +63,9 @@ export function AddMeterForm() {
               required
             />
           </div>
-          <Button type="submit" className="w-full">
-            Pridať merač
-          </Button>
+          <SubmitButton />
         </form>
       </CardContent>
     </Card>
   )
 }
-

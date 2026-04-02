@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Plus, Gauge, CloudLightning, Home, Package, Clock, Zap } from "lucide-react"; // Updated icons
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { sk } from "date-fns/locale";
 // Removed KpiCard import as it will be refactored or used differently
 
@@ -34,6 +34,14 @@ export default async function DashboardPage() {
   const lastUpdateDate = lastConsumption 
     ? format(new Date(lastConsumption.consumption_date), "dd. MM. yyyy", { locale: sk })
     : format(new Date(), "dd. MM. yyyy", { locale: sk });
+
+  const estimatedDepletionDate = estimatedPelletDuration === null
+    ? null
+    : format(
+        addDays(new Date(), Math.max(0, Math.ceil(estimatedPelletDuration))),
+        "dd. MM. yyyy",
+        { locale: sk }
+      );
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
@@ -125,7 +133,9 @@ export default async function DashboardPage() {
                 {formatEstimatedPelletDuration(estimatedPelletDuration)}
               </p>
               <p className="text-sm text-slate-500 mt-1">
-                Pri aktuálnom tempe spotreby
+                {estimatedDepletionDate
+                  ? `Pri aktuálnom tempe spotreby do: ${estimatedDepletionDate}`
+                  : "Pri aktuálnom tempe spotreby"}
               </p>
             </div>
             {/* Actual Average Daily Consumption */}

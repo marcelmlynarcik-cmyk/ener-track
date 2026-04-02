@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { addPelletConsumption } from '../actions';
 import { format } from 'date-fns';
@@ -20,6 +21,16 @@ import { FlameKindling } from 'lucide-react'; // Icon for adding consumption
 
 interface AddPelletConsumptionFormProps {
   trigger?: React.ReactNode;
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Ukladám...' : 'Zaznamenať spotrebu'}
+    </Button>
+  );
 }
 
 export function AddPelletConsumptionForm({ trigger }: AddPelletConsumptionFormProps) {
@@ -67,7 +78,7 @@ export function AddPelletConsumptionForm({ trigger }: AddPelletConsumptionFormPr
             </Label>
             <Input type="number" id="quantity_kg" name="quantity_kg" step="0.01" required min="0.01" className="col-span-3" />
           </div>
-          <Button type="submit">Zaznamenať spotrebu</Button>
+          <SubmitButton />
         </form>
       </DialogContent>
     </Dialog>

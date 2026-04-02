@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useActionState } from "react"
+import { useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { addElectricityReading } from "@/app/electricity/actions"
@@ -28,6 +29,16 @@ interface AddReadingFormProps {
 const initialState = {
   error: "" as string | null,
   success: null as boolean | null,
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? "Ukladám..." : "Pridať odpočet"}
+    </Button>
+  )
 }
 
 export function AddReadingForm({ meters }: AddReadingFormProps) {
@@ -77,9 +88,7 @@ export function AddReadingForm({ meters }: AddReadingFormProps) {
               required
             />
           </div>
-          <Button type="submit" className="w-full">
-            Pridať odpočet
-          </Button>
+          <SubmitButton />
         </form>
       </CardContent>
     </Card>
