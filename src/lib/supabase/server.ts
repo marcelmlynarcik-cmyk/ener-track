@@ -16,13 +16,6 @@ export function getSupabaseServerClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  // --- Temporary logging for debugging ---
-  console.log('--- Supabase Server Client Init ---');
-  console.log('SUPABASE_URL (from .env):', supabaseUrl ? 'Loaded' : 'NOT LOADED', supabaseUrl);
-  console.log('SUPABASE_ANON_KEY (from .env):', supabaseAnonKey ? 'Loaded' : 'NOT LOADED', supabaseAnonKey);
-  console.log('-----------------------------------');
-  // --- End temporary logging ---
-
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase environment variables are missing! Check .env.local");
     // Throw an error early if keys are missing to prevent "Invalid API key" from Supabase

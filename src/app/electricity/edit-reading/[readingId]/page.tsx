@@ -3,6 +3,8 @@ import { getElectricityMeters, getElectricityReading } from "@/app/electricity/a
 import { EditReadingForm } from "./_components/edit-reading-form";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 interface EditReadingPageProps {
   params: Promise<{
     readingId: string;
