@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { format, parseISO } from 'date-fns';
 import { PELLET_DAILY_AVERAGE_LOOKBACK_DAYS } from '@/lib/pellet-duration';
 
+const PELLET_QUANTITY_EPSILON = 0.000001;
+
 export async function getPelletPurchases() {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
@@ -181,10 +183,10 @@ export async function getPelletConsumption() {
     console.error('Error fetching pellet consumption:', error);
     return [];
   }
-  // Ensure cost_czk is always a number
+  // Keep the UI contract stable even if the database still uses cost_eur.
   return data.map(entry => ({
     ...entry,
-    cost_czk: entry.cost_czk ?? 0, // Changed from cost_eur to cost_czk
+    cost_czk: entry.cost_czk ?? entry.cost_eur ?? 0,
   }));
 }
 
@@ -201,13 +203,10 @@ export async function addPelletConsumption(
     return { success: false, message: 'Invalid input for pellet consumption.' };
   }
 
-  let remainingConsumption = quantity_kg;
-  let totalCost = 0;
-
   // Get available stock in FIFO order
   const { data: stockBatches, error: stockBatchesError } = await supabase
     .from('pellet_stock_batches')
-    .select('*')
+    .select('id, remaining_quantity_kg, purchase_price_per_kg, entry_date, created_at')
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true }) // Secondary sort for true FIFO
     .gt('remaining_quantity_kg', 0); // Only get batches with remaining stock
@@ -221,37 +220,63 @@ export async function addPelletConsumption(
     return { success: false, message: 'No pellet stock available for consumption.' };
   }
 
+  const totalAvailableStock = stockBatches.reduce((sum, batch) => sum + Number(batch.remaining_quantity_kg), 0);
+  if (totalAvailableStock + PELLET_QUANTITY_EPSILON < quantity_kg) {
+    return { success: false, message: 'Not enough pellet stock to cover consumption.' };
+  }
+
+  let remainingConsumption = quantity_kg;
+  let totalCost = 0;
+  const batchUpdates: Array<{ id: string; previousRemaining: number }> = [];
+
   // Consume from stock batches (FIFO)
   for (const batch of stockBatches) {
-    if (remainingConsumption <= 0) break;
+    if (remainingConsumption <= PELLET_QUANTITY_EPSILON) break;
 
-    const canConsume = Math.min(remainingConsumption, batch.remaining_quantity_kg);
+    const currentRemaining = Number(batch.remaining_quantity_kg);
+    const canConsume = Math.min(remainingConsumption, currentRemaining);
     totalCost += canConsume * batch.purchase_price_per_kg;
     remainingConsumption -= canConsume;
+    const nextRemaining = Math.max(0, currentRemaining - canConsume);
 
     const { error: updateError } = await supabase
       .from('pellet_stock_batches')
-      .update({ remaining_quantity_kg: batch.remaining_quantity_kg - canConsume })
+      .update({ remaining_quantity_kg: nextRemaining })
       .eq('id', batch.id);
 
     if (updateError) {
       console.error('Error updating pellet stock batch:', updateError);
       return { success: false, message: 'Failed to update pellet stock during consumption.' };
     }
+
+    batchUpdates.push({
+      id: batch.id,
+      previousRemaining: currentRemaining,
+    });
   }
 
-  if (remainingConsumption > 0) {
+  if (remainingConsumption > PELLET_QUANTITY_EPSILON) {
     return { success: false, message: 'Not enough pellet stock to cover consumption.' };
   }
 
   // Add consumption entry
   const { error: consumptionError } = await supabase
     .from('pellet_consumption')
-    .insert({ consumption_date, quantity_kg, cost_czk: totalCost })
+    .insert({ consumption_date, quantity_kg, cost_eur: totalCost })
     .select();
 
   if (consumptionError) {
     console.error('Error adding pellet consumption:', consumptionError);
+    for (const batchUpdate of batchUpdates) {
+      const { error: rollbackError } = await supabase
+        .from('pellet_stock_batches')
+        .update({ remaining_quantity_kg: batchUpdate.previousRemaining })
+        .eq('id', batchUpdate.id);
+
+      if (rollbackError) {
+        console.error('Error rolling back pellet stock batch after failed consumption insert:', rollbackError);
+      }
+    }
     return { success: false, message: 'Failed to add pellet consumption.' };
   }
 
@@ -363,7 +388,7 @@ export async function getPelletOverviewData() {
     // Get last consumption
     const { data: lastConsumptionData, error: lastConsumptionError } = await supabase
         .from('pellet_consumption')
-        .select('*, cost_czk') // Select cost_czk instead of cost_eur
+        .select('*')
         .order('consumption_date', { ascending: false })
         .limit(1)
         .single();
@@ -378,7 +403,10 @@ export async function getPelletOverviewData() {
         currentStock,
         averagePricePerKg,
         lastPurchase: lastPurchaseData || null,
-        lastConsumption: lastConsumptionData || null,
+        lastConsumption: lastConsumptionData ? {
+          ...lastConsumptionData,
+          cost_czk: lastConsumptionData.cost_czk ?? lastConsumptionData.cost_eur ?? 0,
+        } : null,
         estimatedPelletDuration: estimatedDurationDays,
         averageDailyConsumption,
     };
@@ -388,7 +416,7 @@ export async function getMonthlyPelletConsumptionChartData() {
     const supabase = getSupabaseServerClient();
     const { data: consumptionData, error } = await supabase
       .from('pellet_consumption')
-      .select('consumption_date, quantity_kg, cost_czk')
+      .select('consumption_date, quantity_kg, cost_eur')
       .order('consumption_date', { ascending: true });
   
     if (error) {
@@ -405,7 +433,7 @@ export async function getMonthlyPelletConsumptionChartData() {
       const current = monthlyConsumptionMap.get(monthYear) || { quantity_kg: 0, total_cost: 0 };
       monthlyConsumptionMap.set(monthYear, {
         quantity_kg: current.quantity_kg + entry.quantity_kg,
-        total_cost: current.total_cost + (entry.cost_czk ?? 0),
+        total_cost: current.total_cost + (entry.cost_eur ?? 0),
       });
     }
   
