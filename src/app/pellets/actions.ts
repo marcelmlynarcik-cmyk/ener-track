@@ -206,7 +206,7 @@ export async function addPelletConsumption(
   // Get available stock in FIFO order
   const { data: stockBatches, error: stockBatchesError } = await supabase
     .from('pellet_stock_batches')
-    .select('id, remaining_quantity_kg, purchase_price_per_kg, entry_date, created_at')
+    .select('id, purchase_id, initial_quantity_kg, remaining_quantity_kg, purchase_price_per_kg, entry_date, created_at')
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true }) // Secondary sort for true FIFO
     .gt('remaining_quantity_kg', 0); // Only get batches with remaining stock
@@ -227,7 +227,10 @@ export async function addPelletConsumption(
 
   let remainingConsumption = quantity_kg;
   let totalCost = 0;
-  const batchUpdates: Array<{ id: string; previousRemaining: number }> = [];
+  const batchUpdates: Array<
+    | { type: 'update'; id: string; previousRemaining: number }
+    | { type: 'delete'; batch: typeof stockBatches[number]; previousRemaining: number }
+  > = [];
 
   // Consume from stock batches (FIFO)
   for (const batch of stockBatches) {
@@ -239,20 +242,53 @@ export async function addPelletConsumption(
     remainingConsumption -= canConsume;
     const nextRemaining = Math.max(0, currentRemaining - canConsume);
 
-    const { error: updateError } = await supabase
-      .from('pellet_stock_batches')
-      .update({ remaining_quantity_kg: nextRemaining })
-      .eq('id', batch.id);
+    if (nextRemaining <= PELLET_QUANTITY_EPSILON) {
+      const { error: updateError } = await supabase
+        .from('pellet_stock_batches')
+        .update({ remaining_quantity_kg: 0 })
+        .eq('id', batch.id);
 
-    if (updateError) {
-      console.error('Error updating pellet stock batch:', updateError);
-      return { success: false, message: 'Failed to update pellet stock during consumption.' };
+      if (updateError) {
+        console.error('Error setting depleted pellet stock batch to zero, deleting batch instead:', updateError);
+        const { error: deleteError } = await supabase
+          .from('pellet_stock_batches')
+          .delete()
+          .eq('id', batch.id);
+
+        if (deleteError) {
+          console.error('Error deleting depleted pellet stock batch:', deleteError);
+          return { success: false, message: 'Failed to update pellet stock during consumption.' };
+        }
+
+        batchUpdates.push({
+          type: 'delete',
+          batch,
+          previousRemaining: currentRemaining,
+        });
+      } else {
+        batchUpdates.push({
+          type: 'update',
+          id: batch.id,
+          previousRemaining: currentRemaining,
+        });
+      }
+    } else {
+      const { error: updateError } = await supabase
+        .from('pellet_stock_batches')
+        .update({ remaining_quantity_kg: nextRemaining })
+        .eq('id', batch.id);
+
+      if (updateError) {
+        console.error('Error updating pellet stock batch:', updateError);
+        return { success: false, message: 'Failed to update pellet stock during consumption.' };
+      }
+
+      batchUpdates.push({
+        type: 'update',
+        id: batch.id,
+        previousRemaining: currentRemaining,
+      });
     }
-
-    batchUpdates.push({
-      id: batch.id,
-      previousRemaining: currentRemaining,
-    });
   }
 
   if (remainingConsumption > PELLET_QUANTITY_EPSILON) {
@@ -267,11 +303,18 @@ export async function addPelletConsumption(
 
   if (consumptionError) {
     console.error('Error adding pellet consumption:', consumptionError);
-    for (const batchUpdate of batchUpdates) {
-      const { error: rollbackError } = await supabase
-        .from('pellet_stock_batches')
-        .update({ remaining_quantity_kg: batchUpdate.previousRemaining })
-        .eq('id', batchUpdate.id);
+    for (const batchUpdate of [...batchUpdates].reverse()) {
+      const { error: rollbackError } = batchUpdate.type === 'delete'
+        ? await supabase
+          .from('pellet_stock_batches')
+          .insert({
+            ...batchUpdate.batch,
+            remaining_quantity_kg: batchUpdate.previousRemaining,
+          })
+        : await supabase
+          .from('pellet_stock_batches')
+          .update({ remaining_quantity_kg: batchUpdate.previousRemaining })
+          .eq('id', batchUpdate.id);
 
       if (rollbackError) {
         console.error('Error rolling back pellet stock batch after failed consumption insert:', rollbackError);
@@ -548,7 +591,7 @@ async function getEstimatedPelletDurationWithAverage() {
 
   const { data: recentConsumptionData, error: consumptionError } = await supabase
     .from('pellet_consumption')
-    .select('quantity_kg')
+    .select('consumption_date, quantity_kg')
     .gte('consumption_date', periodStartFormatted)
     .order('consumption_date', { ascending: true });
 
@@ -573,6 +616,19 @@ async function getEstimatedPelletDurationWithAverage() {
   }
 
   const estimatedDurationDays = currentStock / averageDailyConsumption;
+  const lastConsumptionDate = parseISO(recentConsumptionData[recentConsumptionData.length - 1].consumption_date);
+  const projectedDepletionFromLastConsumption = new Date(lastConsumptionDate);
+  projectedDepletionFromLastConsumption.setDate(
+    projectedDepletionFromLastConsumption.getDate() + Math.ceil(estimatedDurationDays),
+  );
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  projectedDepletionFromLastConsumption.setHours(0, 0, 0, 0);
+
+  if (projectedDepletionFromLastConsumption < today) {
+    return { estimatedDurationDays: null, averageDailyConsumption: null };
+  }
 
   return { estimatedDurationDays, averageDailyConsumption };
 }

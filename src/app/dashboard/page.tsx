@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Link from "next/link";
-import { Plus, Gauge, CloudLightning, Home, Package, Clock, Zap } from "lucide-react"; // Updated icons
+import { Plus, Package, Zap } from "lucide-react"; // Updated icons
 import { addDays, format } from "date-fns";
 import { sk } from "date-fns/locale";
 // Removed KpiCard import as it will be refactored or used differently
@@ -17,6 +17,8 @@ import {
   formatEstimatedPelletDuration,
   getEstimatedPelletDurationColor,
 } from "@/lib/pellet-duration";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const meters = await getElectricityMeters();

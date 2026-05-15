@@ -12,6 +12,8 @@ import { PelletHistory } from './_components/pellet-history';
 import { Button } from '@/components/ui/button';
 import { formatAverageDailyConsumption, formatEstimatedPelletDuration } from '@/lib/pellet-duration';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PelletsPage() {
   const { 
     currentStock, 
