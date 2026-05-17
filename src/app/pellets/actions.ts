@@ -7,6 +7,43 @@ import { PELLET_DAILY_AVERAGE_LOOKBACK_DAYS } from '@/lib/pellet-duration';
 
 const PELLET_QUANTITY_EPSILON = 0.000001;
 
+function isUniqueViolation(error: { code?: string } | null): boolean {
+  return error?.code === '23505';
+}
+
+function isMissingColumnError(error: { code?: string; message?: string } | null, column: string): boolean {
+  return error?.code === '42703' || error?.message?.includes(`'${column}'`) || error?.message?.includes(`"${column}"`) || false;
+}
+
+async function insertPelletConsumptionEntry(
+  supabase: ReturnType<typeof getSupabaseServerClient>,
+  entry: { consumption_date: string; quantity_kg: number; cost: number },
+) {
+  const { error: costEurError } = await supabase
+    .from('pellet_consumption')
+    .insert({
+      consumption_date: entry.consumption_date,
+      quantity_kg: entry.quantity_kg,
+      cost_eur: entry.cost,
+    })
+    .select();
+
+  if (!isMissingColumnError(costEurError, 'cost_eur')) {
+    return costEurError;
+  }
+
+  const { error: costCzkError } = await supabase
+    .from('pellet_consumption')
+    .insert({
+      consumption_date: entry.consumption_date,
+      quantity_kg: entry.quantity_kg,
+      cost_czk: entry.cost,
+    })
+    .select();
+
+  return costCzkError;
+}
+
 export async function getPelletPurchases() {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
@@ -295,11 +332,12 @@ export async function addPelletConsumption(
     return { success: false, message: 'Not enough pellet stock to cover consumption.' };
   }
 
-  // Add consumption entry
-  const { error: consumptionError } = await supabase
-    .from('pellet_consumption')
-    .insert({ consumption_date, quantity_kg, cost_eur: totalCost })
-    .select();
+  // Add consumption entry. Older databases used cost_eur, newer ones may use cost_czk.
+  const consumptionError = await insertPelletConsumptionEntry(supabase, {
+    consumption_date,
+    quantity_kg,
+    cost: totalCost,
+  });
 
   if (consumptionError) {
     console.error('Error adding pellet consumption:', consumptionError);
@@ -320,7 +358,11 @@ export async function addPelletConsumption(
         console.error('Error rolling back pellet stock batch after failed consumption insert:', rollbackError);
       }
     }
-    return { success: false, message: 'Failed to add pellet consumption.' };
+    if (isUniqueViolation(consumptionError)) {
+      return { success: false, message: 'Spotreba peliet pre tento datum uz existuje. Upravte existujuci zaznam alebo zvolte iny datum.' };
+    }
+
+    return { success: false, message: 'Nepodarilo sa ulozit spotrebu peliet.' };
   }
 
   revalidatePath('/pellets');
@@ -350,7 +392,11 @@ export async function updatePelletConsumption(
   
     if (consumptionUpdateError) {
       console.error('Error updating pellet consumption:', consumptionUpdateError);
-      return { success: false, message: 'Failed to update pellet consumption.' };
+      if (isUniqueViolation(consumptionUpdateError)) {
+        return { success: false, message: 'Spotreba peliet pre tento datum uz existuje. Zvolte iny datum alebo upravte existujuci zaznam.' };
+      }
+
+      return { success: false, message: 'Nepodarilo sa upravit spotrebu peliet.' };
     }
   
     revalidatePath('/pellets');
