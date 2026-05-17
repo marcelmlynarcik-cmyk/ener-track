@@ -29,7 +29,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="pb-16 md:pb-0">{children}</div>
+          <div className="pb-16 md:pt-16 md:pb-0">{children}</div>
           <BottomNavbar />
           <Toaster />
         </ThemeProvider>
