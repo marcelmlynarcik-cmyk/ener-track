@@ -94,6 +94,46 @@ const Toggle = ({ mode, setMode }: { mode: ViewMode, setMode: (m: ViewMode) => v
   </div>
 );
 
+const YearComparisonControls = ({
+  availableYears,
+  yearA,
+  yearB,
+  setYearA,
+  setYearB,
+}: {
+  availableYears: string[];
+  yearA: string;
+  yearB: string;
+  setYearA: (year: string) => void;
+  setYearB: (year: string) => void;
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+    <div className="space-y-1">
+      <h2 className="text-lg font-bold text-slate-900 tracking-tight">Porovnanie rokov</h2>
+      <p className="text-sm text-slate-500">Výber platí pre mesačné grafy elektriny, peliet a ceny peliet.</p>
+    </div>
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 w-full sm:w-auto">
+      <Select value={yearA} onValueChange={setYearA}>
+        <SelectTrigger className="w-full sm:w-[120px] h-10 rounded-xl border-slate-200">
+          <SelectValue placeholder="Rok A" />
+        </SelectTrigger>
+        <SelectContent>
+          {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Minus className="w-3 h-3 text-slate-300" />
+      <Select value={yearB} onValueChange={setYearB}>
+        <SelectTrigger className="w-full sm:w-[120px] h-10 rounded-xl border-slate-200">
+          <SelectValue placeholder="Rok B" />
+        </SelectTrigger>
+        <SelectContent>
+          {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+);
+
 const CustomTooltip = ({ active, payload, label, unit, yearA, yearB }: ComparisonTooltipProps) => {
   if (active && payload && payload.length) {
     const valA = payload[0].value || 0;
@@ -354,29 +394,6 @@ export default function StatisticsPage() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Štatistiky</h1>
             <p className="text-slate-500">Analýza spotreby a trendov</p>
           </div>
-
-          <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-2">Porovnanie rokov</span>
-            <div className="flex items-center gap-2">
-              <Select value={yearA} onValueChange={setYearA}>
-                <SelectTrigger className="w-[110px] h-9 rounded-xl border-slate-200">
-                  <SelectValue placeholder="Rok A" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Minus className="w-3 h-3 text-slate-300" />
-              <Select value={yearB} onValueChange={setYearB}>
-                <SelectTrigger className="w-[110px] h-9 rounded-xl border-slate-200">
-                  <SelectValue placeholder="Rok B" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </div>
 
         {/* SECTION 0 – CELKOVÁ HISTÓRIA */}
@@ -452,9 +469,17 @@ export default function StatisticsPage() {
           </div>
         </div>
 
+        <YearComparisonControls
+          availableYears={availableYears}
+          yearA={yearA}
+          yearB={yearB}
+          setYearA={setYearA}
+          setYearB={setYearB}
+        />
+
         {/* SECTION 1 – ELEKTRINA */}
         <Card className="border-none shadow-sm overflow-hidden">
-          <CardHeader className="border-b border-slate-50 pb-6 flex flex-row items-center justify-between space-y-0">
+          <CardHeader className="border-b border-slate-50 pb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 space-y-0">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-50 rounded-lg">
                 <Zap className="w-5 h-5 text-blue-600" />
@@ -530,7 +555,7 @@ export default function StatisticsPage() {
 
         {/* SECTION 2 – PELETY */}
         <Card className="border-none shadow-sm overflow-hidden">
-          <CardHeader className="border-b border-slate-50 pb-6 flex flex-row items-center justify-between space-y-0">
+          <CardHeader className="border-b border-slate-50 pb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 space-y-0">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-50 rounded-lg">
                 <Package className="w-5 h-5 text-emerald-600" />
