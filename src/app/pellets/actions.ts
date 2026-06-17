@@ -710,3 +710,36 @@ export async function getYearlyPelletConsumptionChartData() {
 
   return yearlyData;
 }
+
+export async function getYearlyPelletConsumptionSummaryData() {
+  const supabase = getSupabaseServerClient();
+  const { data: consumptionData, error } = await supabase
+    .from('pellet_consumption')
+    .select('*')
+    .order('consumption_date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching yearly pellet consumption summary:', error);
+    return [];
+  }
+
+  const yearlyData: { [year: number]: { year: string; quantity_kg: number; total_cost_czk: number } } = {};
+
+  for (const entry of consumptionData) {
+    const date = parseISO(entry.consumption_date);
+    const year = date.getFullYear();
+
+    if (!yearlyData[year]) {
+      yearlyData[year] = { year: year.toString(), quantity_kg: 0, total_cost_czk: 0 };
+    }
+
+    yearlyData[year].quantity_kg += Number(entry.quantity_kg) || 0;
+    yearlyData[year].total_cost_czk += Number(entry.cost_czk ?? entry.cost_eur ?? 0) || 0;
+  }
+
+  return Object.values(yearlyData).map(entry => ({
+    year: entry.year,
+    quantity_kg: parseFloat(entry.quantity_kg.toFixed(2)),
+    total_cost_czk: parseFloat(entry.total_cost_czk.toFixed(2)),
+  }));
+}

@@ -10,8 +10,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
   Area,
   AreaChart,
 } from 'recharts';
@@ -23,10 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { TrendingUp, TrendingDown, Minus, Zap, Package, Tag } from 'lucide-react';
 import { getYearlyElectricityConsumptionChartData } from '@/app/electricity/actions';
-import { getYearlyPelletConsumptionChartData, getPelletPriceEvolutionChartData } from '@/app/pellets/actions';
+import {
+  getYearlyPelletConsumptionChartData,
+  getPelletPriceEvolutionChartData,
+  getYearlyPelletConsumptionSummaryData,
+} from '@/app/pellets/actions';
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún',
@@ -34,6 +35,38 @@ const MONTHS = [
 ];
 
 type ViewMode = 'monthly' | 'cumulative';
+type YearlyMonthlyData = Record<string, Record<number, number>>;
+type PelletAnnualSummary = { year: string; quantity_kg: number; total_cost_czk: number };
+type PricePoint = { date: string; price_per_kg: number };
+type ComparisonChartPoint = {
+  name: string;
+  yearA: number;
+  yearB: number;
+  hasDataA: boolean;
+  hasDataB: boolean;
+};
+
+type TooltipPayload = {
+  value?: number;
+  fill?: string;
+};
+
+type ComparisonTooltipProps = {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+  unit: string;
+  yearA: string;
+  yearB: string;
+};
+
+type HistoryTooltipProps = {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+  unit: string;
+  name: string;
+};
 
 const getOverlappingPeriodDays = (year: number, maxIndex: number) => {
   const safeMaxIndex = Math.max(0, Math.min(maxIndex, 11));
@@ -44,10 +77,132 @@ const getOverlappingPeriodDays = (year: number, maxIndex: number) => {
   return days;
 };
 
+const Toggle = ({ mode, setMode }: { mode: ViewMode, setMode: (m: ViewMode) => void }) => (
+  <div className="flex bg-slate-100 p-1 rounded-xl">
+    <button
+      onClick={() => setMode('monthly')}
+      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${mode === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+    >
+      Mesačne
+    </button>
+    <button
+      onClick={() => setMode('cumulative')}
+      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${mode === 'cumulative' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+    >
+      Kumulatívne
+    </button>
+  </div>
+);
+
+const CustomTooltip = ({ active, payload, label, unit, yearA, yearB }: ComparisonTooltipProps) => {
+  if (active && payload && payload.length) {
+    const valA = payload[0].value || 0;
+    const valB = payload[1]?.value || 0;
+    const diff = valA - valB;
+    const diffPercent = valB !== 0 ? (diff / valB) * 100 : 0;
+
+    return (
+      <div className="bg-white p-4 border-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-xl min-w-[180px]">
+        <p className="font-bold text-slate-900 mb-3 text-sm">{label}</p>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[0].fill }} />
+              <span className="text-xs text-slate-500 font-medium">Rok {yearA}</span>
+            </div>
+            <span className="text-xs font-bold text-slate-900">{valA.toLocaleString()} {unit}</span>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[1]?.fill || '#cbd5e1' }} />
+              <span className="text-xs text-slate-400 font-medium">Rok {yearB}</span>
+            </div>
+            <span className="text-xs font-bold text-slate-400">{valB.toLocaleString()} {unit}</span>
+          </div>
+          <div className="pt-2 border-t border-slate-50 mt-2">
+            <div className={`flex justify-between items-center ${diff >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider">Rozdiel</span>
+              <span className="text-xs font-bold">
+                {diff >= 0 ? '+' : ''}{diff.toFixed(1)} {unit} ({diffPercent.toFixed(1)}%)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const HistoryTooltip = ({ active, payload, label, unit, name }: HistoryTooltipProps) => {
+  if (active && payload && payload.length) {
+    const value = payload[0].value || 0;
+
+    return (
+      <div className="bg-white p-4 border-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-xl min-w-[180px]">
+        <p className="font-bold text-slate-900 mb-2 text-sm">Rok {label}</p>
+        <div className="flex justify-between items-center gap-4">
+          <span className="text-xs text-slate-500 font-medium">{name}</span>
+          <span className="text-xs font-bold text-slate-900">{Number(value).toLocaleString()} {unit}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const AnnualBarChart = ({
+  data,
+  dataKey,
+  unit,
+  name,
+  fill,
+  tickFormatter,
+}: {
+  data: Record<string, string | number>[];
+  dataKey: string;
+  unit: string;
+  name: string;
+  fill: string;
+  tickFormatter?: (value: number) => string;
+}) => (
+  <div className="h-[280px] w-full overflow-visible">
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 16, left: 12, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="0" vertical={false} stroke="#e2e8f0" strokeOpacity={0.1} />
+        <XAxis
+          dataKey="year"
+          axisLine={false}
+          tickLine={false}
+          tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
+          dy={10}
+        />
+        <YAxis
+          axisLine={false}
+          tickLine={false}
+          width={56}
+          tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }}
+          tickMargin={6}
+          tickFormatter={tickFormatter}
+        />
+        <Tooltip cursor={{ fill: '#f8fafc' }} content={<HistoryTooltip unit={unit} name={name} />} />
+        <Bar
+          name={name}
+          dataKey={dataKey}
+          fill={fill}
+          radius={[4, 4, 0, 0]}
+          barSize={34}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+);
+
 export default function StatisticsPage() {
-  const [electricityData, setElectricityData] = useState<any>({});
-  const [pelletData, setPelletData] = useState<any>({});
-  const [priceData, setPriceData] = useState<any[]>([]);
+  const [electricityData, setElectricityData] = useState<YearlyMonthlyData>({});
+  const [pelletData, setPelletData] = useState<YearlyMonthlyData>({});
+  const [pelletSummaryData, setPelletSummaryData] = useState<PelletAnnualSummary[]>([]);
+  const [priceData, setPriceData] = useState<PricePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [elecMode, setElecMode] = useState<ViewMode>('monthly');
   const [pelletMode, setPelletMode] = useState<ViewMode>('monthly');
@@ -58,13 +213,15 @@ export default function StatisticsPage() {
 
   useEffect(() => {
     async function fetchData() {
-      const [elec, pell, price] = await Promise.all([
+      const [elec, pell, pelletSummary, price] = await Promise.all([
         getYearlyElectricityConsumptionChartData(),
         getYearlyPelletConsumptionChartData(),
+        getYearlyPelletConsumptionSummaryData(),
         getPelletPriceEvolutionChartData(),
       ]);
       setElectricityData(elec);
       setPelletData(pell);
+      setPelletSummaryData(pelletSummary);
       setPriceData(price);
       setLoading(false);
     }
@@ -83,7 +240,7 @@ export default function StatisticsPage() {
   }, [electricityData, pelletData, priceData]);
 
   // Helper to process chart data based on mode (monthly/cumulative)
-  const processData = (rawData: any, yA: string, yB: string, mode: ViewMode) => {
+  const processData = (rawData: YearlyMonthlyData, yA: string, yB: string, mode: ViewMode) => {
     let accA = 0;
     let accB = 0;
     return MONTHS.map((month, index) => {
@@ -104,6 +261,23 @@ export default function StatisticsPage() {
   const electricityChartData = useMemo(() => processData(electricityData, yearA, yearB, elecMode), [electricityData, yearA, yearB, elecMode]);
   const pelletChartData = useMemo(() => processData(pelletData, yearA, yearB, pelletMode), [pelletData, yearA, yearB, pelletMode]);
 
+  const electricityAnnualHistoryData = useMemo(() => {
+    return Object.entries(electricityData)
+      .map(([year, months]) => ({
+        year,
+        total_kwh: Object.values(months).reduce((sum, value) => sum + (Number(value) || 0), 0),
+      }))
+      .sort((a, b) => Number(a.year) - Number(b.year))
+      .map(entry => ({
+        ...entry,
+        total_kwh: parseFloat(entry.total_kwh.toFixed(2)),
+      }));
+  }, [electricityData]);
+
+  const pelletAnnualHistoryData = useMemo(() => {
+    return [...pelletSummaryData].sort((a, b) => Number(a.year) - Number(b.year));
+  }, [pelletSummaryData]);
+
   const priceChartData = useMemo(() => {
     return priceData.map(p => ({
       date: p.date,
@@ -112,16 +286,8 @@ export default function StatisticsPage() {
     })).filter(p => p.year === yearA || p.year === yearB);
   }, [priceData, yearA, yearB]);
 
-  const priceDomain = useMemo(() => {
-    if (!priceChartData.length) return [0, 10];
-    const prices = priceChartData.map(d => d.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    return [Math.max(0, min - 0.5), max + 0.5];
-  }, [priceChartData]);
-
   // Comparison logic: Only compare overlapping months
-  const getComparison = (data: any[]) => {
+  const getComparison = (data: ComparisonChartPoint[]) => {
     // Find the last month index that has data for Year A
     const lastMonthA = [...data].reverse().findIndex(d => d.hasDataA && d.yearA > 0);
     const maxIndex = lastMonthA === -1 ? 11 : 11 - lastMonthA;
@@ -178,63 +344,6 @@ export default function StatisticsPage() {
     </div>;
   }
 
-  const CustomTooltip = ({ active, payload, label, unit }: any) => {
-    if (active && payload && payload.length) {
-      const valA = payload[0].value;
-      const valB = payload[1]?.value || 0;
-      const diff = valA - valB;
-      const diffPercent = valB !== 0 ? (diff / valB) * 100 : 0;
-
-      return (
-        <div className="bg-white p-4 border-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-xl min-w-[180px]">
-          <p className="font-bold text-slate-900 mb-3 text-sm">{label}</p>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[0].fill }} />
-                <span className="text-xs text-slate-500 font-medium">Rok {yearA}</span>
-              </div>
-              <span className="text-xs font-bold text-slate-900">{valA.toLocaleString()} {unit}</span>
-            </div>
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[1]?.fill || '#cbd5e1' }} />
-                <span className="text-xs text-slate-400 font-medium">Rok {yearB}</span>
-              </div>
-              <span className="text-xs font-bold text-slate-400">{valB.toLocaleString()} {unit}</span>
-            </div>
-            <div className="pt-2 border-t border-slate-50 mt-2">
-              <div className={`flex justify-between items-center ${diff >= 0 ? 'text-red-500' : 'text-green-500'}`}>
-                <span className="text-[10px] font-bold uppercase tracking-wider">Rozdiel</span>
-                <span className="text-xs font-bold">
-                  {diff >= 0 ? '+' : ''}{diff.toFixed(1)} {unit} ({diffPercent.toFixed(1)}%)
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const Toggle = ({ mode, setMode }: { mode: ViewMode, setMode: (m: ViewMode) => void }) => (
-    <div className="flex bg-slate-100 p-1 rounded-xl">
-      <button 
-        onClick={() => setMode('monthly')}
-        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${mode === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-      >
-        Mesačne
-      </button>
-      <button 
-        onClick={() => setMode('cumulative')}
-        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${mode === 'cumulative' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-      >
-        Kumulatívne
-      </button>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-10">
@@ -270,6 +379,79 @@ export default function StatisticsPage() {
           </div>
         </div>
 
+        {/* SECTION 0 – CELKOVÁ HISTÓRIA */}
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Celková história po rokoch</h2>
+            <p className="text-sm text-slate-500">Ročné súčty za všetky dostupné dáta bez porovnávania dvoch vybraných rokov.</p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <Card className="border-none shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-50 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Package className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Peléty – ročná spotreba</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <AnnualBarChart
+                  data={pelletAnnualHistoryData}
+                  dataKey="quantity_kg"
+                  unit="kg"
+                  name="Spotreba"
+                  fill="#059669"
+                  tickFormatter={(value) => `${value.toLocaleString()}`}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-50 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-50 rounded-lg">
+                    <Tag className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Peléty – ročné náklady</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <AnnualBarChart
+                  data={pelletAnnualHistoryData}
+                  dataKey="total_cost_czk"
+                  unit="Kč"
+                  name="Náklady"
+                  fill="#d97706"
+                  tickFormatter={(value) => `${Math.round(value / 1000)}k`}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-slate-50 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <Zap className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Elektrina – ročná spotreba</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <AnnualBarChart
+                  data={electricityAnnualHistoryData}
+                  dataKey="total_kwh"
+                  unit="kWh"
+                  name="Spotreba"
+                  fill="#2563eb"
+                  tickFormatter={(value) => `${value.toLocaleString()}`}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
         {/* SECTION 1 – ELEKTRINA */}
         <Card className="border-none shadow-sm overflow-hidden">
           <CardHeader className="border-b border-slate-50 pb-6 flex flex-row items-center justify-between space-y-0">
@@ -300,7 +482,7 @@ export default function StatisticsPage() {
                     tick={{fill: '#64748b', fontSize: 12, fontWeight: 500}}
                     tickMargin={6}
                   />
-                  <Tooltip cursor={{fill: '#f8fafc'}} content={<CustomTooltip unit="kWh" />} />
+                  <Tooltip cursor={{fill: '#f8fafc'}} content={<CustomTooltip unit="kWh" yearA={yearA} yearB={yearB} />} />
                   <Legend 
                     verticalAlign="top" 
                     align="right" 
@@ -376,7 +558,7 @@ export default function StatisticsPage() {
                     tick={{fill: '#64748b', fontSize: 12, fontWeight: 500}}
                     tickMargin={6}
                   />
-                  <Tooltip cursor={{fill: '#f8fafc'}} content={<CustomTooltip unit="kg" />} />
+                  <Tooltip cursor={{fill: '#f8fafc'}} content={<CustomTooltip unit="kg" yearA={yearA} yearB={yearB} />} />
                   <Legend 
                     verticalAlign="top" 
                     align="right" 
